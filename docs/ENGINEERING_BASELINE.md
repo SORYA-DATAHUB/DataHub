@@ -11,7 +11,7 @@
 |---|---|
 | A-01 | Operator is a single organisation ("the Platform", SKAI Technology, Cambodia) buying data for its own AI work (Khmer-first OCR / NLP). No external buyers in v1; a `buyer` role and `orders` module are reserved for v2. |
 | A-02 | Primary languages of content: Khmer (km) and English (en); UI ships in English with all strings in a message catalogue so Khmer UI can be added. All text inputs/outputs are UTF-8, NFC-normalised **except** annotation transcription, which is stored exactly as typed (see §11). |
-| A-03 | Initial scale: ≤ 2,000 registered users, ≤ 200 concurrent sessions, ≤ 50 concurrent uploads, ≤ 20 TB stored in year 1, single file ≤ 5 GB, dataset ≤ 50 GB. |
+| A-03 | Initial scale: ≤ 2,000 registered users, ≤ 200 concurrent sessions, ≤ 50 concurrent uploads, ≤ 20 TB stored in year 1, single file ≤ 4,000,000,000 bytes (AM-01), dataset ≤ 50 GB. |
 | A-04 | Currency is USD only. Amounts stored as **integer micro-USD** (`*_micros`, 1 USD = 1,000,000). Payouts are whole cents (multiple of 10,000 micros). |
 | A-05 | Payout methods for v1: `bank_transfer` (Cambodian banks), `aba_pay`, `wise`, `paypal`, `other`. Method details are stored as admin-visible JSON, never auto-executed. |
 | A-06 | Minimum withdrawal $10.00; maximum single withdrawal $5,000.00; both configurable (`system_settings`). |
@@ -151,7 +151,7 @@ Detection uses magic bytes; extension must agree with detected MIME family or fi
 
 ZIP limits: ≤ 10,000 members; total uncompressed ≤ 20 GB; per-member ratio ≤ 100:1; depth ≤ 1 (nested zip members are *not* expanded and are marked `failed: nested_archive`); member names sanitised (no absolute paths, no `..`, no symlinks, no device files); members extracted by streaming to new S3 objects — never written to an executable path, never executed.
 
-Upload limits: file ≤ 5 GB (`max_file_bytes`), dataset ≤ 50 GB (`max_dataset_bytes`), unreviewed storage per user ≤ 200 GB (`user_pending_quota_bytes`), ≤ 2,000 files per dataset (excluding archive members). Multipart part size 16 MiB (raised automatically to keep ≤ 10,000 parts).
+Upload limits: file ≤ 4,000,000,000 bytes (`max_file_bytes`, AM-01), dataset ≤ 50 GB (`max_dataset_bytes`), unreviewed storage per user ≤ 200 GB (`user_pending_quota_bytes`), ≤ 2,000 files per dataset (excluding archive members). Multipart part size 16 MiB (raised automatically to keep ≤ 10,000 parts).
 
 ## 8. Money and earnings rules
 
@@ -270,7 +270,7 @@ Pagination: `?page=1&page_size=25` (max 100) → `{"items":[…],"page","page_si
 
 ## 14. Non-functional targets
 
-p95 API latency < 300 ms (non-file endpoints, 200 concurrent users); upload success ≥ 99 % for files ≤ 5 GB on resumable path; processing throughput ≥ 2 GB/min per worker for hashing/scanning; availability 99.5 % monthly; RPO 24 h (daily `pg_dump` + object storage versioning), optional 15 min with WAL archiving; RTO 4 h; WCAG 2.2 AA.
+p95 API latency < 300 ms (non-file endpoints, 200 concurrent users); upload success ≥ 99 % for files ≤ 4,000,000,000 bytes on resumable path; processing throughput ≥ 2 GB/min per worker for hashing/scanning; availability 99.5 % monthly; RPO 24 h (daily `pg_dump` + object storage protection), optional 15 min with WAL archiving; RTO 4 h; WCAG 2.2 AA.
 
 ## 15. Requirement ID scheme (used across all documents)
 

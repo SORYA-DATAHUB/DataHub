@@ -31,7 +31,7 @@
 **Dependencies.** SRS.md, BRD.md, USER_STORIES.md, LLD.md, SDD.md, DATABASE_SCHEMA.md, API_DOCUMENTATION.md, AUTH_AUTHORIZATION.md, FILE_UPLOAD_STORAGE.md, UI_UX_DESIGN.md; TEST_CASES.md (planned IDs).
 
 **Acceptance criteria for this document.**
-1. Every SRS requirement appears exactly once in §3 (239 rows; SRS §2 declares 227 for the original catalogue).
+1. Every SRS requirement appears exactly once in §3 (239 rows, matching SRS §2).
 2. Every row has a BR source or an explicit baseline source, a design reference, a planned test ID, an implementation location and a status.
 3. Every BR-01 … BR-34 maps to ≥ 1 requirement (§4).
 4. Requirements without a user story are listed with a reason (§5).
@@ -72,7 +72,7 @@
 
 Functional requirements with ≥ 1 story: **167/179**. All requirements with ≥ 1 story: **222/239**. User stories: **95**.
 
-> Note: SRS.md now contains 239 requirement rows versus 227 declared in SRS §2 at baseline; new IDs are included below.
+> Count check: SRS.md and this matrix both contain 239 unique requirements (179 functional, 38 non-functional, 22 security).
 
 ## 3. Traceability matrix
 
@@ -311,14 +311,14 @@ Columns: **ID** · **Pri** (MoSCoW) · **Requirement** (abridged; SRS text is no
 | FR-ADM-08 | M | GET /admin/settings and PUT /admin/settings/{key} (settings.manage, super_admin) shall … | BR-27 | LLD §12.2; API §6.4, §10.17; DB §4.7 | US-PUB-08, US-SUP-04, US-SUP-05, US-SUP-08 | TC-ADM-008 | apps/api/src/datahub/modules/admin/; web `/maintenance`, `/access-denied`, `/admin/settings` | Planned |
 | FR-ADM-09 | M | GET /admin/roles shall list roles and their permission codes (BL §6). | BR-27 | LLD §4.1; AUTH_AUTHORIZATION §11.1; API §10.14 | US-ADM-05, US-SUP-06 | TC-ADM-009 | apps/api/src/datahub/modules/identity/; web `/admin/users/[id]`, `/admin/settings` | Planned |
 | FR-ADM-10 | M | POST /public/contact (anonymous, rate-limited) shall accept name, email, category … | BR-28 | LLD §12.1–§12.2; API §10.4; DB §4.7 | US-PUB-06, US-ADM-09 | TC-ADM-010 | apps/api/src/datahub/modules/admin/; web `/help`, `/admin/datasets/[id]`, `/admin/messages` | Planned |
-| FR-ADM-11 | M | Admins shall process deletion_requests (pending → processed \\| refused with reason). … | BR-28 | LLD §12.2–§12.3; DB §7.2 | US-ADM-23 | TC-ADM-011 | apps/api/src/datahub/modules/admin/; web `/admin/users/[id]` | Planned |
-| FR-ADM-12 | S | Admins shall view background_job_records (task, status, attempts, last error) filtered by … | BR-31 | LLD §3.13, §13; DB §4.7 | US-ADM-24 | TC-ADM-012 | apps/api/src/datahub/core/jobs.py; web `/admin` | Planned |
+| FR-ADM-11 | M | Admin deletion queue and step-up decision; guarded due processing uses requested → processing → completed or rejected. | BR-28 | LLD §12.1–§12.3; API §10.14; DB §4.7.7 | US-ADM-23 | TC-ADM-011 | apps/api/src/datahub/modules/admin/; web `/admin/users/[id]`, `/admin` | Planned |
+| FR-ADM-12 | S | Admin background-job list and step-up safe requeue for failed/dead idempotent registered tasks. | BR-31 | LLD §3.13, §12–§13; API §10.17; DB §4.7.5 | US-ADM-24 | TC-ADM-012 | apps/api/src/datahub/core/jobs.py; web `/admin` | Planned |
 | FR-ADM-13 | M | POST /public/takedown-requests (no login, CSRF + rate limit 5/h per IP, honeypot) shall … | BR-28 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-013 | apps/api/src/datahub/modules/admin/ | Planned |
 | FR-ADM-14 | M | GET /admin/takedown-requests (user.manage) shall list requests filtered by status … | BR-28 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-014 | apps/api/src/datahub/modules/admin/ | Planned |
 | FR-ADM-15 | M | When the setting maintenance_mode is true, every API call except /healthz, /readyz, … | BR-31 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-015 | apps/api/src/datahub/modules/admin/ | Planned |
 | FR-ADM-16 | M | Datasets, payout requests and export jobs shall receive an immutable human reference code … | BR-24, BR-25 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-016 | apps/api/src/datahub/modules/admin/ | Planned |
 | FR-ADM-17 | M | Admin list endpoints shall support: role on GET /admin/users; user_id on GET … | BR-25, BR-26 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-017 | apps/api/src/datahub/modules/admin/ | Planned |
-| FR-ADM-18 | M | A super_admin shall be able to set and release a legal hold (legal_hold + mandatory … | BR-28 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-018 | apps/api/src/datahub/modules/admin/ | Planned |
+| FR-ADM-18 | M | Super admin sets/releases an audited user or dataset legal hold with mandatory reason and step-up MFA. | BR-28 | LLD §12; API §10.17; DB §4.1–§4.2 | — (see §5) | TC-ADM-018 | apps/api/src/datahub/modules/admin/ | Planned |
 | FR-ADM-19 | M | Beat job admin.requeue_stalled (every 5 min) shall re-enqueue email_outbox rows pending > … | BR-31 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-019 | apps/api/src/datahub/modules/admin/ | Planned |
 | FR-ADM-20 | M | While the setting legal_docs_approved is false (default), the Terms of Service, Privacy … | BR-28 | LLD §12; API §10.15, §10.17; DB §4.7 | — (see §5) | TC-ADM-020 | apps/api/src/datahub/modules/admin/ | Planned |
 
@@ -598,10 +598,7 @@ Requirements whose source is the baseline only (no BR cited in SRS Source or §1
 
 | # | Item | Action |
 |---|---|---|
-| GAP-01 | Admin processing/refusal of a deletion request (FR-ADM-11) has no admin endpoint in API_DOCUMENTATION.md §10.0; LLD §12.3 processes due requests via the daily job `admin.process_deletion_requests`. Endpoint to be added. | Add to API_DOCUMENTATION.md §10 and openapi.yaml; record in DECISION_LOG.md |
-| GAP-02 | The background-job view and re-enqueue action (FR-ADM-12) have no endpoint in API_DOCUMENTATION.md §10.0. Endpoint to be added. | Add to API_DOCUMENTATION.md §10 and openapi.yaml; record in DECISION_LOG.md |
-| GAP-03 | `GET /admin/takedown-requests`, `POST /admin/takedown-requests/{id}/decision` and `POST /public/takedown-requests` are mandated by AM-04 / LLD S-01 but are not yet in the API_DOCUMENTATION.md §10.0 index. | Add to API_DOCUMENTATION.md §10 and openapi.yaml; record in DECISION_LOG.md |
-| N-01 | FR-UPL-02 and FR-DS-07 state a 5 GB per-file limit; AM-01 sets 4,000,000,000 bytes. Stories and tests use AM-01. | Amend SRS text at next revision |
+| RESOLVED-01 | Admin deletion decision, background-job inspection/requeue and takedown routes are now in the generated API/OpenAPI contract. | Keep generator sources, generated API documentation and RTM synchronized in CI. |
+| N-01 | AM-01 sets the per-file limit to 4,000,000,000 bytes and now governs the SRS, stories and tests. | Retain an automated limit-consistency check. |
 | N-02 | SRS §9 error codes are flat (`invalid_state`); API_DOCUMENTATION.md §6.3 uses dotted codes (`precondition.failed`). Tests assert the API catalogue codes mapped from the SRS names. | Publish a mapping table in API_DOCUMENTATION.md §6.3 |
 | N-03 | Test-ID collision `FR-UPL-nn` vs `NFR-UPL-nn` resolved as `TC-UPLR-0nn` for NFR-UPL. | TEST_CASES.md uses the same exception |
-

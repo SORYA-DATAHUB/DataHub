@@ -99,7 +99,7 @@ Roles and permissions are defined in **BL §6**. A user may hold several roles, 
 
 ## 5. Functional requirements summary
 
-The full catalogue of 227 requirements is in [SRS.md](SRS.md). This table summarises the product-level expectations per module.
+The full catalogue of 239 requirements is in [SRS.md](SRS.md). This table summarises the product-level expectations per module.
 
 | Module | Product-level expectation | SRS range | Count |
 |---|---|---|---:|
@@ -107,7 +107,7 @@ The full catalogue of 227 requirements is in [SRS.md](SRS.md). This table summar
 | USER | Onboarding is one screen: agreement + rights declaration. Up to 5 payout methods. Users control non-essential email. | FR-USER-01…08 | 8 |
 | VER | A single verification form; admins decide approved / needs info / rejected with reasons. | FR-VER-01…07 | 7 |
 | DS | A dataset is a draft until submitted. Status, files, estimate and feedback are always visible. | FR-DS-01…14 | 14 |
-| UPL | Uploads of files up to 5 GB survive network drops and browser restarts for 24 h. | FR-UPL-01…12 | 12 |
+| UPL | Uploads of files up to 4,000,000,000 bytes survive network drops and browser restarts for 24 h. | FR-UPL-01…12 | 12 |
 | PROC | Every file is typed, hashed, scanned, previewed and duplicate-checked automatically. Unsafe files never become payable. | FR-PROC-01…13 | 13 |
 | REV | Reviewers claim, decide per file or in bulk, see the payable amount, and finalize once (idempotent). | FR-REV-01…14 | 14 |
 | FIN | Earnings follow the formula exactly, every cent is traceable in the ledger, and reconciliation runs nightly. | FR-FIN-01…15 | 15 |
@@ -127,7 +127,7 @@ The full catalogue of 227 requirements is in [SRS.md](SRS.md). This table summar
 | Availability & recovery | 99.5 % monthly; RPO 24 h; RTO 4 h; quarterly restore drill | NFR-AVL-01…05 |
 | Accessibility & Khmer | WCAG 2.2 AA; keyboard-complete; 360 px+; Noto Sans Khmer, `lang="km"`, line-height ≥ 1.6; catalogue-ready UI | NFR-ACC-01…07 |
 | Integrity | Integer micro-USD; balanced append-only ledger; single-transaction commands; error envelope; OpenAPI contract | NFR-INT-01…10 |
-| Upload reliability | ≥ 99 % completion ≤ 5 GB; resume within 24 h; hash-verified | NFR-UPL-01…05 |
+| Upload reliability | ≥ 99 % completion ≤ 4,000,000,000 bytes; resume within 24 h; hash-verified | NFR-UPL-01…05 |
 | Observability | JSON logs with request_id; Prometheus metrics; alerts; no secrets in logs | NFR-OBS-01…05 |
 | Security | Argon2id, secure cookies, CSRF, admin MFA, rate limits, RBAC deny-by-default, private storage, CSP, scans | SEC-01…22 |
 
@@ -182,7 +182,7 @@ Pricing rules history and "schedule new rate"; settings; roles; audit log and se
 | Capability | Product detail | SRS |
 |---|---|---|
 | Metadata | Title, description, languages (Khmer and English offered first), category, raw/labeled class with an explanation of what counts as "labeled" (clean text, transcriptions, structured labels), provenance, licence, personal-data flag, tags | FR-DS-01 |
-| Upload | Up to 2,000 files and 50 GB per dataset, 5 GB per file. Per-file and overall progress, speed, ETA. Pause/resume via cancel + resume. Retry failed parts automatically 5×. | FR-UPL-01…12 |
+| Upload | Up to 2,000 files and 50 GB per dataset, 4,000,000,000 bytes per file. Per-file and overall progress, speed, ETA. Pause/resume via cancel + resume. Retry failed parts automatically 5×. | FR-UPL-01…12 |
 | Resume | After reload, a banner "3 uploads can be resumed – re-select the files" matches files by name, size and modification time. | FR-UPL-11 |
 | Processing status | Per file: Uploaded → Processing → Ready / Failed (reason in plain language: "File type does not match its extension", "Archive exceeds safety limits") / Quarantined ("Security scan found a threat"). | FR-PROC-01…09 |
 | Duplicates | Badges: "Already accepted elsewhere – will not earn", "Duplicate within this dataset", "Similar to another file". | FR-PROC-11, 12 |

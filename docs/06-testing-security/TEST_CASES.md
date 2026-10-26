@@ -57,7 +57,7 @@ Each run records build SHA, environment, case ID, timestamp, actor, fixture vers
 
 | ID | Scenario | Expected result |
 |---|---|---|
-| TC-UP-001 | 0-byte, 5 GB boundary, 5 GB + 1 byte | Policy-consistent validation at initiation and completion |
+| TC-UP-001 | 0-byte, configured 4 GB boundary, and 4 GB + 1 byte | Policy-consistent validation at initiation and completion |
 | TC-UP-002 | Dataset/user quota races | Atomic enforcement; no over-quota committed session |
 | TC-UP-003 | Abandoned session past 24 h | Multipart aborted and temporary objects removed; durable audit/job evidence |
 | TC-UP-004 | Client lies about parts/ETags | Object store remains authority; completion rejected without trusted match |

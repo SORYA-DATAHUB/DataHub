@@ -1,0 +1,168 @@
+name: datahub
+
+x-api-env: &api-env
+  DATAHUB_ENV: development
+  DATAHUB_VERSION: 0.1.0-dev
+  DATAHUB_DATABASE_URL: postgresql+psycopg://datahub:datahub_dev_password@postgres:5432/datahub
+  DATAHUB_REDIS_URL: redis://redis:6379/0
+  DATAHUB_CELERY_BROKER_URL: redis://redis:6379/1
+  DATAHUB_CELERY_RESULT_BACKEND: redis://redis:6379/2
+  DATAHUB_S3_ENDPOINT_URL: http://s3:8333
+  DATAHUB_S3_PUBLIC_ENDPOINT_URL: http://localhost:9410
+  DATAHUB_S3_REGION: us-east-1
+  DATAHUB_S3_BUCKET: datahub-private
+  DATAHUB_S3_ACCESS_KEY: datahub-dev-access
+  DATAHUB_S3_SECRET_KEY: datahub-dev-secret
+  DATAHUB_CLAMAV_HOST: clamav
+  DATAHUB_CLAMAV_PORT: 3310
+  DATAHUB_SMTP_HOST: mailpit
+  DATAHUB_SMTP_PORT: 1025
+  DATAHUB_FRONTEND_ORIGIN: http://localhost:3410
+  DATAHUB_SESSION_SECRET: development-session-secret-at-least-32-bytes
+  DATAHUB_CSRF_SECRET: development-csrf-secret-is-different-32-bytes
+  DATAHUB_FIELD_ENCRYPTION_KEYS: development-only-not-a-real-fernet-key
+
+services:
+  postgres:
+    image: postgres:17.2-alpine
+    environment:
+      POSTGRES_DB: datahub
+      POSTGRES_USER: datahub
+      POSTGRES_PASSWORD: datahub_dev_password
+    ports: ["5440:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datahub -d datahub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8.0.2-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports: ["6390:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  s3:
+    image: chrislusf/seaweedfs:4.47
+    command: ["server", "-s3", "-dir=/data", "-s3.port=8333", "-filer.port=8888", "-master.port=9333", "-volume.port=8080"]
+    ports: ["9410:8333", "9411:8888"]
+    volumes: ["s3_data:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8333/"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  storage-setup:
+    image: amazon/aws-cli:2.22.35
+    depends_on:
+      s3: { condition: service_healthy }
+    environment:
+      AWS_ACCESS_KEY_ID: datahub-dev-access
+      AWS_SECRET_ACCESS_KEY: datahub-dev-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        aws --endpoint-url http://s3:8333 s3api create-bucket --bucket datahub-private 2>/dev/null || true;
+        aws --endpoint-url http://s3:8333 s3api put-public-access-block --bucket datahub-private
+        --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true || true
+    restart: "no"
+
+  clamav:
+    image: clamav/clamav:1.4
+    volumes: ["clamav_data:/var/lib/clamav"]
+    healthcheck:
+      test: ["CMD-SHELL", "printf 'PING\\n' | nc -w 2 127.0.0.1 3310 | grep -q PONG"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    ports: ["8425:8025", "1035:1025"]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    environment: *api-env
+    ports: ["8410:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      s3: { condition: service_healthy }
+      storage-setup: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    command: ["celery", "-A", "datahub.worker:celery_app", "worker", "--loglevel=INFO", "--queues=default,processing,exports,email", "--concurrency=2"]
+    environment: *api-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      storage-setup: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+
+  beat:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    command: ["celery", "-A", "datahub.worker:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    environment: *api-env
+    depends_on:
+      redis: { condition: service_healthy }
+
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web.Dockerfile
+    environment:
+      DATAHUB_INTERNAL_API_ORIGIN: http://api:8000
+      NEXT_PUBLIC_API_BASE_URL: /api/v1
+    ports: ["3410:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  postgres_data:
+  redis_data:
+  s3_data:
+  clamav_data:

@@ -2,13 +2,13 @@
 
 DataHub is a private data-acquisition, dataset review, annotation and manual contributor-payment platform. Contributors submit authorized documents; reviewers accept eligible unique bytes; the platform records versioned earnings; administrators manage manual payouts; and annotators complete reviewed, separately rewarded tasks.
 
-> **Current state:** documentation baseline in progress. Application services have not yet been implemented or verified. Commands and paths marked “planned” describe the approved implementation contract, not currently working software. See [project status](docs/PROJECT_STATUS.md) and [release readiness](docs/RELEASE_READINESS.md).
+> **Current state:** the 35-document baseline and Phase A foundation are complete. The verified local stack includes the web/API foundations, PostgreSQL, Redis, private S3-compatible storage, ClamAV, Mailpit, Celery worker/beat and automatic Alembic migrations. Product features begin in Phase B and the release remains NO-GO. See [project status](docs/PROJECT_STATUS.md) and [release readiness](docs/RELEASE_READINESS.md).
 
 ## Architecture and stack
 
 The approved v1 architecture is a modular monolith: Next.js 15/React 19/TypeScript frontend; FastAPI/Pydantic/SQLAlchemy/Alembic backend; PostgreSQL 17; Redis 8 and Celery 5; private S3-compatible storage (SeaweedFS locally, R2 or S3 in production); ClamAV; SMTP; Caddy; Docker Compose. Financial values are integer micro-USD in an append-only balanced ledger. Files upload directly to private object storage through resumable multipart URLs and remain unavailable for payment until safe processing and review.
 
-Planned monorepo layout:
+Monorepo layout:
 
 ```text
 apps/web/                 Next.js application
@@ -32,7 +32,7 @@ Core references:
 - [Test plan](docs/06-testing-security/TEST_PLAN.md), [security requirements](docs/06-testing-security/SECURITY_REQUIREMENTS.md), and [threat model](docs/06-testing-security/THREAT_MODEL.md)
 - [Deployment](docs/07-deployment-operations/DEPLOYMENT_PLAN.md), [Docker/CI](docs/07-deployment-operations/DOCKER_CICD.md), and [backup/DR](docs/07-deployment-operations/BACKUP_DISASTER_RECOVERY.md)
 
-## Prerequisites (planned implementation)
+## Prerequisites
 
 - Docker Engine 27+ with Compose v2
 - Git
@@ -41,33 +41,35 @@ Core references:
 
 Never use production documents, credentials, payment evidence or identities in local development.
 
-## Environment setup (available after Phase A)
+## Environment setup
 
 1. Copy `.env.example` to `.env` and replace development-only random secrets. Never commit `.env`.
 2. Start services: `docker compose up -d --build`.
 3. Check health: `docker compose ps` and open web `http://localhost:3410`, API docs `http://localhost:8410/docs`, Mailpit `http://localhost:8425`.
-4. Apply migrations: `docker compose exec api alembic upgrade head`.
-5. Create the first administrator with the planned interactive `scripts/create-admin` command; it must require a strong password through a hidden prompt and MFA enrollment. No default admin is seeded.
+4. Compose runs `alembic upgrade head` through the one-shot `migrate` service before the API and worker start. Verify with `docker compose exec api alembic current`.
+5. Initial-administrator creation is a Phase B deliverable. No default administrator or test identity is seeded.
 
 Approved local host ports are web 3410, API 8410, PostgreSQL 5440, Redis 6390, S3 9410/9411 and Mailpit 8425/1035. ClamAV is internal only.
 
-## Development commands (planned)
+## Development commands
 
 ```bash
 docker compose up -d --build
 docker compose logs -f api worker web
-docker compose exec api alembic upgrade head
-docker compose exec api pytest
-docker compose exec web pnpm lint
-docker compose exec web pnpm typecheck
-docker compose exec web pnpm test
-pnpm --dir tests/e2e test
+docker compose exec api alembic current
+(cd apps/api && uv sync --all-groups && uv run ruff check src tests && uv run mypy src && uv run pytest)
+corepack pnpm install --frozen-lockfile
+corepack pnpm --filter @datahub/web lint
+corepack pnpm --filter @datahub/web typecheck
+corepack pnpm --filter @datahub/web test -- --run
+corepack pnpm --filter @datahub/web build
+python scripts/verify_docs.py
 docker compose down
 ```
 
-Exact commands will be verified and corrected during Phase A; until the corresponding files exist they are contractual documentation, not claimed execution results. Data volumes are intentionally retained by ordinary `docker compose down`; deleting volumes is destructive and is never part of routine setup.
+These Phase A commands are verified. Data volumes are intentionally retained by ordinary `docker compose down`; deleting volumes is destructive and is never part of routine setup.
 
-## Service startup without Compose (planned)
+## Service startup without Compose
 
 - Backend: from `apps/api`, install the locked `uv` environment, apply Alembic migrations and run the FastAPI app on port 8410.
 - Worker/beat: from the same environment, run the declared Celery app with separate worker and beat processes.
@@ -93,7 +95,7 @@ Uploaded content is hostile: never execute it, expose buckets publicly or bypass
 - [Annotator guide](docs/08-user-documentation/ANNOTATOR_GUIDE.md)
 - [Reviewer guide](docs/08-user-documentation/REVIEWER_GUIDE.md)
 
-## Troubleshooting (planned)
+## Troubleshooting
 
 - Unhealthy API: check PostgreSQL/Redis readiness, migrations and redacted API logs.
 - Processing stuck: verify worker queue, ClamAV and object-storage access; do not manually mark a file clean.
@@ -105,4 +107,3 @@ Uploaded content is hostile: never execute it, expose buckets publicly or bypass
 ## License and legal status
 
 Repository source licensing has not yet been selected by the project owner. Product Terms, Privacy Policy and Contributor Agreement are drafts requiring qualified legal review before public launch. No licence to third-party submitted data is implied by this repository.
-

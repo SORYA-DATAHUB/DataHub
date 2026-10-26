@@ -13229,6 +13229,242 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+  /api/v1/admin/deletion-requests:
+    get:
+      tags:
+      - Admin users
+      summary: Account deletion request queue
+      operationId: get_admin_deletion_requests
+      description: Lists account-erasure requests and current machine-evaluated blockers. User contact fields are visible only until anonymisation.
+        Access is audited.
+      x-sortable-fields:
+      - requested_at
+      - scheduled_for
+      - updated_at
+      parameters:
+      - name: status
+        in: query
+        required: false
+        style: form
+        explode: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeletionRequestStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Default `requested,processing`. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter by subject.
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Inclusive lower bound (created_at).
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Exclusive upper bound (created_at).
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - cookieAuth: []
+      x-permission: user.manage
+      x-rate-limit: 600 / min per user.
+      x-admin-mfa: true
+      x-maintenance-exempt: true
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDeletionRequest'
+              example: {items: [{id: 01930b80-1111-7a00-8000-000000000b01, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_email: sophea@example.com,
+                    status: requested, reason: I no longer want to use the service., requested_at: '2026-10-26T08:30:00Z', scheduled_for: '2026-11-09T08:30:00Z',
+                    blockers: [], decided_by: null, decided_at: null, decision_notes: null, completed_at: null, updated_at: '2026-10-26T08:30:00Z'}],
+                page: 1, page_size: 25, total: 1}
+        '401':
+          description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.not_authenticated, message: Sign in to continue., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.email_unverified, message: Verify your email address first., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: validation_error, message: One or more fields are invalid., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
+  /api/v1/admin/deletion-requests/{deletion_id}/decision:
+    post:
+      tags:
+      - Admin users
+      summary: Approve or reject an account deletion request
+      operationId: post_admin_deletion_requests_by_deletion_decision
+      description: '`requested → rejected` immediately for reject. Approve records the decision but keeps `requested` until the 14-day grace expires;
+        the daily processor then performs guarded `requested → processing → completed`. Approval never bypasses an open payout, positive balance,
+        active dataset review/annotation, or legal hold. Actor cannot decide their own request. Every decision and later processing transition
+        is audited and notified.'
+      parameters:
+      - name: deletion_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - cookieAuth: []
+        csrfToken: []
+      x-permission: user.manage
+      x-rate-limit: 120 / min per user.
+      x-admin-mfa: true
+      x-step-up-mfa: true
+      x-maintenance-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletionRequestDecision'
+            example: {decision: approve, reason: Rights and financial checks completed; retain statutory ledger records only.}
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionRequest'
+              example: {id: 01930b80-1111-7a00-8000-000000000b01, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_email: sophea@example.com,
+                status: requested, reason: I no longer want to use the service., requested_at: '2026-10-26T08:30:00Z', scheduled_for: '2026-11-09T08:30:00Z',
+                blockers: [], decided_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02, decided_at: '2026-10-26T09:15:00Z', decision_notes: Rights and
+                  financial checks completed; retain statutory ledger records only., completed_at: null, updated_at: '2026-10-26T09:15:00Z'}
+        '400':
+          description: 'Bad Request. Error codes: `request.malformed`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.malformed, message: The request body is not valid JSON or has the wrong shape., details: null, request_id: req_01JBA7Q4M8}}
+        '401':
+          description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.not_authenticated, message: Sign in to continue., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `permission.separation_of_duties`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`,
+            `auth.mfa_enrollment_required`, `auth.step_up_required`, `csrf.missing`, `csrf.invalid`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: permission.separation_of_duties, message: You cannot act on your own item., details: null, request_id: req_01JBA7Q4M8}}
+        '404':
+          description: 'Not Found. Error codes: `resource.not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: resource.not_found, message: Not found., details: null, request_id: req_01JBA7Q4M8}}
+        '409':
+          description: 'Conflict. Error codes: `deletion.invalid_state`, `deletion.has_blockers`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: deletion.invalid_state, message: This deletion request cannot change from its current status., details: null,
+                  request_id: req_01JBA7Q4M8}}
+        '413':
+          description: 'Content Too Large. Error codes: `request.payload_too_large`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.payload_too_large, message: Request body too large., details: null, request_id: req_01JBA7Q4M8}}
+        '415':
+          description: 'Unsupported Media Type. Error codes: `request.unsupported_media_type`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.unsupported_media_type, message: Unsupported Content-Type., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: validation_error, message: One or more fields are invalid., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
   /api/v1/admin/datasets:
     get:
       tags:
@@ -14674,6 +14910,377 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+  /api/v1/admin/background-jobs:
+    get:
+      tags:
+      - Admin
+      summary: Background job records
+      operationId: get_admin_background_jobs
+      description: Operational records only; args contain identifiers, never credentials or document contents. `last_error` is redacted and truncated
+        to 4,000 characters.
+      x-sortable-fields:
+      - created_at
+      - updated_at
+      - task_name
+      - status
+      parameters:
+      - name: status
+        in: query
+        required: false
+        style: form
+        explode: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackgroundJobStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
+      - name: task_name
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+        description: Exact task name or prefix ending `*`.
+      - name: queue
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - default
+          - processing
+          - exports
+          - email
+        description: Filter.
+      - name: entity_type
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 64
+        description: Filter.
+      - name: entity_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter.
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Inclusive lower bound (created_at).
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Exclusive upper bound (created_at).
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - cookieAuth: []
+      x-permission: user.manage
+      x-rate-limit: 600 / min per user.
+      x-admin-mfa: true
+      x-maintenance-exempt: true
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBackgroundJob'
+              example: {items: [{id: 01930b81-2222-7b00-8000-000000000c01, task_name: datahub.processing.process_file, queue: processing, celery_task_id: 1d4f99e1-2a65-4f89-a9ef-4c91d1ff1111,
+                    args: {file_id: 01930b72-3333-7c00-8000-0000000000f1}, entity_type: dataset_file, entity_id: 01930b72-3333-7c00-8000-0000000000f1,
+                    status: failed, attempts: 3, max_attempts: 3, last_error: ClamAV connection timed out after 30 s, enqueued_at: '2026-10-26T08:30:00Z',
+                    started_at: '2026-10-26T08:30:00Z', finished_at: '2026-10-26T09:15:00Z', next_retry_at: null, created_at: '2026-10-26T08:30:00Z',
+                    updated_at: '2026-10-26T09:15:00Z'}], page: 1, page_size: 25, total: 1}
+        '401':
+          description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.not_authenticated, message: Sign in to continue., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.email_unverified, message: Verify your email address first., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: validation_error, message: One or more fields are invalid., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
+  /api/v1/admin/background-jobs/{job_id}/requeue:
+    post:
+      tags:
+      - Admin
+      summary: Re-enqueue a failed idempotent job
+      operationId: post_admin_background_jobs_by_job_requeue
+      description: Allowed only for `failed|dead` records whose task name is in the server's explicit idempotent safe-requeue registry. In one
+        transaction, locks the source record, proves no equivalent in-flight `(task_name,args_hash)` record exists, creates a new queued record
+        linked in audit metadata, commits, then enqueues after commit. The source is immutable history. Reason and actor are audited.
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - cookieAuth: []
+        csrfToken: []
+      x-permission: user.manage
+      x-rate-limit: 120 / min per user.
+      x-admin-mfa: true
+      x-step-up-mfa: true
+      x-maintenance-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackgroundJobRequeue'
+            example: {reason: ClamAV is healthy again after the incident.}
+      responses:
+        '202':
+          description: Accepted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackgroundJob'
+              example: {id: 01930b81-2222-7b00-8000-000000000c02, task_name: datahub.processing.process_file, queue: processing, celery_task_id: null,
+                args: {file_id: 01930b72-3333-7c00-8000-0000000000f1}, entity_type: dataset_file, entity_id: 01930b72-3333-7c00-8000-0000000000f1,
+                status: queued, attempts: 0, max_attempts: 3, last_error: null, enqueued_at: '2026-10-26T09:15:00Z', started_at: null, finished_at: null,
+                next_retry_at: null, created_at: '2026-10-26T09:15:00Z', updated_at: '2026-10-26T09:15:00Z'}
+        '400':
+          description: 'Bad Request. Error codes: `request.malformed`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.malformed, message: The request body is not valid JSON or has the wrong shape., details: null, request_id: req_01JBA7Q4M8}}
+        '401':
+          description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.not_authenticated, message: Sign in to continue., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`,
+            `auth.step_up_required`, `csrf.missing`, `csrf.invalid`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.email_unverified, message: Verify your email address first., details: null, request_id: req_01JBA7Q4M8}}
+        '404':
+          description: 'Not Found. Error codes: `resource.not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: resource.not_found, message: Not found., details: null, request_id: req_01JBA7Q4M8}}
+        '409':
+          description: 'Conflict. Error codes: `job.not_requeueable`, `job.already_inflight`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: job.not_requeueable, message: Only failed or dead idempotent jobs can be re-enqueued., details: null, request_id: req_01JBA7Q4M8}}
+        '413':
+          description: 'Content Too Large. Error codes: `request.payload_too_large`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.payload_too_large, message: Request body too large., details: null, request_id: req_01JBA7Q4M8}}
+        '415':
+          description: 'Unsupported Media Type. Error codes: `request.unsupported_media_type`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.unsupported_media_type, message: Unsupported Content-Type., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: validation_error, message: One or more fields are invalid., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
+  /api/v1/admin/legal-holds:
+    post:
+      tags:
+      - Admin
+      summary: Set or release a legal hold
+      operationId: post_admin_legal_holds
+      description: Super-administrator only. Locks the target and atomically sets/releases `legal_hold` and `legal_hold_reason`. An active user
+        hold also protects records whose retention depends on that user; an active dataset hold protects its versions/files/reviews/annotations.
+        Purge, anonymisation and secure deletion consult the flag. Both actions require a reason, emit immutable before/after audit, and do not
+        restore data already deleted before the hold.
+      parameters:
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - cookieAuth: []
+        csrfToken: []
+      x-permission: settings.manage
+      x-rate-limit: 120 / min per user.
+      x-admin-mfa: true
+      x-step-up-mfa: true
+      x-maintenance-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalHoldChange'
+            example: {entity_type: dataset, entity_id: 01930b71-2222-7b00-8000-0000000000d1, action: set, reason: Preservation notice LEG-2026-0042
+                approved by counsel.}
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalHold'
+              example: {entity_type: dataset, entity_id: 01930b71-2222-7b00-8000-0000000000d1, active: true, reason: Preservation notice LEG-2026-0042
+                  approved by counsel., changed_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02, changed_at: '2026-10-26T09:15:00Z'}
+        '400':
+          description: 'Bad Request. Error codes: `request.malformed`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.malformed, message: The request body is not valid JSON or has the wrong shape., details: null, request_id: req_01JBA7Q4M8}}
+        '401':
+          description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.not_authenticated, message: Sign in to continue., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`,
+            `auth.step_up_required`, `csrf.missing`, `csrf.invalid`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.email_unverified, message: Verify your email address first., details: null, request_id: req_01JBA7Q4M8}}
+        '409':
+          description: 'Conflict. Error codes: `legal_hold.invalid_state`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: legal_hold.invalid_state, message: The legal hold is already in the requested state., details: null, request_id: req_01JBA7Q4M8}}
+        '413':
+          description: 'Content Too Large. Error codes: `request.payload_too_large`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.payload_too_large, message: Request body too large., details: null, request_id: req_01JBA7Q4M8}}
+        '415':
+          description: 'Unsupported Media Type. Error codes: `request.unsupported_media_type`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.unsupported_media_type, message: Unsupported Content-Type., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: validation_error, message: One or more fields are invalid., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
   /api/v1/admin/settings:
     get:
       tags:
@@ -15149,6 +15756,23 @@ components:
       - public_form
       - user
       - admin
+    DeletionRequestStatus:
+      type: string
+      enum:
+      - requested
+      - processing
+      - completed
+      - rejected
+      - cancelled
+    BackgroundJobStatus:
+      type: string
+      enum:
+      - queued
+      - running
+      - retrying
+      - succeeded
+      - failed
+      - dead
     PayoutStatus:
       type: string
       enum:
@@ -16085,25 +16709,63 @@ components:
         id:
           type: string
           format: uuid
-        status:
+        user_id:
           type: string
-          enum:
-          - pending
-          - processing
-          - completed
-          - rejected
-        created_at:
+          format: uuid
+        user_email:
+          type:
+          - string
+          - 'null'
+          format: email
+        status:
+          $ref: '#/components/schemas/DeletionRequestStatus'
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+        requested_at:
           type: string
           format: date-time
         scheduled_for:
+          type: string
+          format: date-time
+        blockers:
+          type: array
+          items:
+            type: string
+            maxLength: 64
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decided_at:
           type:
           - string
           - 'null'
           format: date-time
+        decision_notes:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
       required:
       - id
+      - user_id
       - status
-      - created_at
+      - requested_at
+      - scheduled_for
+      - blockers
+      - updated_at
     NotificationPreferences:
       type: object
       properties:
@@ -19388,6 +20050,172 @@ components:
       required:
       - decision
       additionalProperties: false
+    DeletionRequestDecision:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+          - approve
+          - reject
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: Mandatory audit/user-facing rationale. Approval does not bypass blockers or the grace period.
+      required:
+      - decision
+      - reason
+      additionalProperties: false
+    BackgroundJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        task_name:
+          type: string
+          maxLength: 128
+        queue:
+          type: string
+          enum:
+          - default
+          - processing
+          - exports
+          - email
+        celery_task_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 155
+        args:
+          type: object
+          description: Identifier-only arguments; secrets are never recorded.
+        entity_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+        entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        status:
+          $ref: '#/components/schemas/BackgroundJobStatus'
+        attempts:
+          type: integer
+          minimum: 0
+        max_attempts:
+          type: integer
+          minimum: 1
+        last_error:
+          type:
+          - string
+          - 'null'
+          maxLength: 4000
+        enqueued_at:
+          type: string
+          format: date-time
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        next_retry_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - task_name
+      - queue
+      - args
+      - status
+      - attempts
+      - max_attempts
+      - enqueued_at
+      - created_at
+      - updated_at
+    BackgroundJobRequeue:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 1000
+      required:
+      - reason
+      additionalProperties: false
+    LegalHoldChange:
+      type: object
+      properties:
+        entity_type:
+          type: string
+          enum:
+          - user
+          - dataset
+        entity_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum:
+          - set
+          - release
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: Mandatory for both set and release; identifies authority/ticket without embedding sensitive document contents.
+      required:
+      - entity_type
+      - entity_id
+      - action
+      - reason
+      additionalProperties: false
+    LegalHold:
+      type: object
+      properties:
+        entity_type:
+          type: string
+          enum:
+          - user
+          - dataset
+        entity_id:
+          type: string
+          format: uuid
+        active:
+          type: boolean
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 2000
+        changed_by:
+          type: string
+          format: uuid
+        changed_at:
+          type: string
+          format: date-time
+      required:
+      - entity_type
+      - entity_id
+      - active
+      - changed_by
+      - changed_at
     TakedownRequest:
       type: object
       properties:
@@ -20286,6 +21114,28 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/TakedownCase'
+        required:
+        - items
+    PaginatedDeletionRequest:
+      allOf:
+      - $ref: '#/components/schemas/PaginationMeta'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/DeletionRequest'
+        required:
+        - items
+    PaginatedBackgroundJob:
+      allOf:
+      - $ref: '#/components/schemas/PaginationMeta'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/BackgroundJob'
         required:
         - items
     PaginatedRewardWithTotals:

@@ -29,7 +29,7 @@ Accepted — 2026-10-26.
 
 ## Context
 
-Reviewers and annotators must view PDFs, TIFFs and images inside the app. MASTER Part 6 lists PDF.js. Rendering untrusted PDFs in the browser exposes every viewer to parser exploits and font/JS features, requires downloading entire originals (up to 5 GB) to the client, and behaves differently across browsers. Annotation tasks are page-based, so stable per-page images are useful anyway.
+Reviewers and annotators must view PDFs, TIFFs and images inside the app. MASTER Part 6 lists PDF.js. Rendering untrusted PDFs in the browser exposes every viewer to parser exploits and font/JS features, requires downloading entire originals (up to 4,000,000,000 bytes under AM-01) to the client, and behaves differently across browsers. Annotation tasks are page-based, so stable per-page images are useful anyway.
 
 ## Decision
 

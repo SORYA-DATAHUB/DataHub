@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-and-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install pyyaml
+      - run: python scripts/docgen/gen.py && python scripts/docgen/assemble.py && python scripts/docgen/authz.py
+      - run: git diff --exit-code
+      - run: python scripts/verify_docs.py
+
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { version: "0.8.22", enable-cache: true }
+      - run: uv sync --frozen --all-groups
+        working-directory: apps/api
+      - run: uv run ruff check . && uv run mypy && uv run pytest --cov=datahub
+        working-directory: apps/api
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "10.20.0" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @datahub/web lint
+      - run: pnpm --filter @datahub/web typecheck
+      - run: pnpm --filter @datahub/web test
+      - run: pnpm --filter @datahub/web build
+
+  containers:
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker build -f infrastructure/docker/api.Dockerfile .
+      - run: docker build -f infrastructure/docker/web.Dockerfile .

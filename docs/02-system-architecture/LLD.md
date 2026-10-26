@@ -1385,6 +1385,11 @@ Layout: `router.py` (`/admin/datasets` search, `/admin/datasets/{id}/takedown`, 
 | `PUT /admin/settings/{key}` | `put_setting` | `settings.manage` | `update_setting(db, actor, key, data.value)` |
 | `GET /admin/takedown-requests` (AM-04) | `list_takedowns` | `user.manage` | `list_takedown_requests(db, filters, page)` (status — comma-separated, claim_type, source, dataset_id, q, date range) |
 | `POST /admin/takedown-requests/{id}/decision` (AM-04; step-up) | `decide_takedown` | `user.manage` | `decide_takedown_request(db, actor, request_id, data)` (`actioned` requires the dataset to be `taken_down`, or `apply_takedown=true` which calls `take_down_dataset` in the same tx) |
+| `GET /admin/deletion-requests` | `list_deletions` | `user.manage` | `list_deletion_requests(db, filters, page)` |
+| `POST /admin/deletion-requests/{id}/decision` (step-up) | `decide_deletion` | `user.manage` | `decide_deletion_request(db, actor, request_id, data)`; approval retains `requested` until due and never bypasses blockers |
+| `GET /admin/background-jobs` | `list_jobs` | `user.manage` | `list_background_jobs(db, filters, page)` |
+| `POST /admin/background-jobs/{id}/requeue` (step-up) | `requeue_job` | `user.manage` | `requeue_failed_job(db, actor, job_id, reason)`; explicit safe registry + in-flight uniqueness guard |
+| `POST /admin/legal-holds` (step-up) | `change_legal_hold` | `settings.manage` (super_admin) | `change_legal_hold(db, actor, entity_type, entity_id, action, reason)` |
 | `POST /public/takedown-requests` (AM-04; no login, rate `public_contact` 5/h/IP) | `public_takedown` | — | `submit_takedown_request(db, data, ctx)` → `takedown_requests` row `source='public_form'`, `received`; acknowledgement email; notify `user.manage` holders |
 | `POST /public/contact` | `public_contact` | rate `public_contact` | `submit_public_contact(db, data, ctx)` |
 
@@ -1402,6 +1407,11 @@ def update_setting(db, actor: Actor, key: str, value: Any) -> SettingOut
 def list_takedown_requests(db, filters, page) -> Page[TakedownRequestOut]
 def decide_takedown_request(db, actor: Actor, request_id: UUID, data: TakedownDecisionIn) -> TakedownRequest
 def submit_takedown_request(db, data: TakedownClaimIn, ctx: RequestContext) -> None
+def list_deletion_requests(db, filters, page) -> Page[DeletionRequestOut]
+def decide_deletion_request(db, actor: Actor, request_id: UUID, data: DeletionDecisionIn) -> DeletionRequestOut
+def list_background_jobs(db, filters, page) -> Page[BackgroundJobOut]
+def requeue_failed_job(db, actor: Actor, job_id: UUID, reason: str) -> BackgroundJobOut
+def change_legal_hold(db, actor: Actor, entity_type: Literal["user", "dataset"], entity_id: UUID, action: Literal["set", "release"], reason: str) -> LegalHoldOut
 def requeue_stalled(db, now: datetime) -> RequeueReport
 def submit_public_contact(db, data: ContactIn, ctx: RequestContext) -> None
 def process_deletion_request(db, request_id: UUID) -> DeletionOutcome

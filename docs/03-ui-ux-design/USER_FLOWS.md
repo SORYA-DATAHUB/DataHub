@@ -110,7 +110,7 @@ flowchart TD
     S1(["Contributor clicks Upload dataset"]) --> G1{"Onboarding complete?"}
     G1 -->|"No"| G2["Redirect /onboarding?next=/datasets/new"]
     G1 -->|"Yes"| U1["Upload Dataset /datasets/new (#16): metadata + choose files/folder/ZIP"]
-    U1 --> U2{"Client pre-checks: allowed extension, file ≤ 5 GB, dataset ≤ 50 GB, ≤ 2,000 files, quota"}
+    U1 --> U2{"Client pre-checks: allowed extension, file ≤ 4 GB, dataset ≤ 50 GB, ≤ 2,000 files, quota"}
     U2 -->|"Fail"| U3["List problems per file; remove or fix"]
     U3 --> U1
     U2 -->|"Pass"| U4[["POST /datasets (status draft)"]]

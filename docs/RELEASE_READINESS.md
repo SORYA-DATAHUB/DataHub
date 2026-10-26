@@ -6,7 +6,7 @@ This is the evidence ledger for deciding whether a specific DataHub build may be
 
 ## Current verdict
 
-**NOT READY — Phase 0 documentation baseline.** No application build, staging deployment, production deployment or executed product test exists. No production URL is claimed.
+**NOT READY — documentation baseline and Phase A foundation verified; product implementation incomplete.** Local production images, dependency health, automatic migration, readiness and background-queue smoke tests have passed. No staging or production deployment, complete product workflow, release security evidence or production URL is claimed.
 
 ## Status vocabulary
 
@@ -20,7 +20,8 @@ This is the evidence ledger for deciding whether a specific DataHub build may be
 
 | Gate | Current state | Required evidence |
 |---|---|---|
-| 35 mandatory documents | In review | `PROJECT_STATUS.md` 35/35 plus consistency/traceability report |
+| 35 mandatory documents | Verified | `PROJECT_STATUS.md` 35/35; 239 unique requirements; generated API/auth contracts synchronized |
+| Phase A foundation | Verified | Locked dependencies; API/web images; healthy Compose dependencies; migration at head; readiness and Celery probe passed |
 | Requirements traceability | Draft exists | Every release requirement maps to design, implementation and passed test |
 | Core product workflows | Not completed | Passed TC-CRIT-001–020 on release build |
 | Authorization/resource isolation | Not completed | Automated role matrix and horizontal-access report |
@@ -51,4 +52,3 @@ For each candidate add build SHA/tag, artifact digests/SBOM, migration revision,
 ## Go/no-go rule
 
 Release is **NO-GO** while any critical workflow, authorization, financial, file-safety, restore or legal gate is incomplete; while a severity-1/2 defect or critical/high exploitable vulnerability is open; or while rollback/monitoring/backup cannot be demonstrated. Only the authorized owner may approve production after all technical gates are verified and human approvals are recorded.
-

@@ -7,7 +7,7 @@
 | **Assumptions** | Single organisation operator (A-01); ≤ 2,000 users, ≤ 200 concurrent sessions (A-03); web app and API share one origin so first-party `SameSite=Lax` cookies work; SMTP provider configured (A-12); clocks synchronised by NTP (TOTP tolerance ±30 s). |
 | **Decisions** | Opaque server-side sessions (no JWT) in an HttpOnly cookie `dh_session`; SHA-256 of the token stored. CSRF double-submit cookie `dh_csrf` + `X-CSRF-Token` + Origin check. Argon2id passwords (argon2-cffi, t=3, m=64 MiB, p=4). TOTP MFA mandatory for admin/super_admin, step-up within 15 min for financial/privileged actions. Enumeration-safe register/forgot. 10 consecutive failures → 15-minute lock. Permission codes per baseline §6 enforced by a FastAPI dependency plus service-level resource checks; hidden resources return 404. |
 | **Dependencies** | `ENGINEERING_BASELINE.md` §3, §6, §9, §12; `API_DOCUMENTATION.md`; `openapi.yaml` (`x-permission`, `x-admin-mfa`, `x-step-up-mfa` extensions drive the matrix tests); Database Schema (`users`, `user_sessions`, `email_verifications`, `mfa_recovery_codes`, `security_events`, `roles`, `user_roles`, `audit_logs`); Security Requirements and Threat Model documents. |
-| **Acceptance criteria** | (1) All rules in §§3–13 have automated tests (§16). (2) The generated endpoint × role matrix test suite passes for all 146 operations with 0 unexpected allows. (3) No password, token, TOTP secret or recovery code is ever stored in plaintext or logged (log-scrubber test). (4) Suspension revokes all sessions and closes WebSockets within 5 s. (5) Financial actions without fresh MFA are refused with `auth.step_up_required`. (6) Separation-of-duties rules in §12.3 each have a negative test. |
+| **Acceptance criteria** | (1) All rules in §§3–13 have automated tests (§16). (2) The generated endpoint × role matrix test suite passes for all 151 operations with 0 unexpected allows. (3) No password, token, TOTP secret or recovery code is ever stored in plaintext or logged (log-scrubber test). (4) Suspension revokes all sessions and closes WebSockets within 5 s. (5) Financial actions without fresh MFA are refused with `auth.step_up_required`. (6) Separation-of-duties rules in §12.3 each have a negative test. |
 
 **Document control:** Version 1.1 · 2026-10-26 · Status: Baseline (v1.1 — baseline §16 amendments AM-01…AM-14 applied) · Owner: Security lead / Backend lead · Changes via `DECISION_LOG.md`.
 
@@ -517,6 +517,8 @@ Legend: **✓** allowed · **M** allowed with an MFA-verified admin session · *
 | POST | `/api/v1/admin/users/{user_id}/revoke-sessions` | `user.manage` | — | — | — | Sᴿ | Sᴿ | target ≠ self; target holding admin/super_admin requires super_admin |
 | GET | `/api/v1/admin/verifications` | `user.verify` | — | — | — | M | M |  |
 | POST | `/api/v1/admin/verifications/{verification_id}/decision` | `user.verify` | — | — | — | Mᴿ | Mᴿ | subject ≠ actor |
+| GET | `/api/v1/admin/deletion-requests` | `user.manage` | — | — | — | M | M |  |
+| POST | `/api/v1/admin/deletion-requests/{deletion_id}/decision` | `user.manage` | — | — | — | S | S |  |
 | GET | `/api/v1/admin/datasets` | `dataset.read.any` | — | — | — | M | M |  |
 | GET | `/api/v1/admin/datasets/{dataset_id}` | `dataset.read.any` | — | — | — | M | M |  |
 | POST | `/api/v1/admin/datasets/{dataset_id}/takedown` | `dataset.read.any` | — | — | — | S | S |  |
@@ -530,6 +532,9 @@ Legend: **✓** allowed · **M** allowed with an MFA-verified admin session · *
 | GET | `/api/v1/admin/analytics/overview` | `analytics.read` | — | — | — | M | M |  |
 | GET | `/api/v1/admin/audit-logs` | `audit.read` | — | — | — | — | M |  |
 | GET | `/api/v1/admin/security-events` | `audit.read` | — | — | — | — | M |  |
+| GET | `/api/v1/admin/background-jobs` | `user.manage` | — | — | — | M | M |  |
+| POST | `/api/v1/admin/background-jobs/{job_id}/requeue` | `user.manage` | — | — | — | S | S |  |
+| POST | `/api/v1/admin/legal-holds` | `settings.manage` | — | — | — | — | S |  |
 | GET | `/api/v1/admin/settings` | `settings.manage` | — | — | — | — | M |  |
 | PUT | `/api/v1/admin/settings/{key}` | `settings.manage` | — | — | — | — | S |  |
 | GET | `/api/v1/admin/roles` | `user.read` | — | — | — | M | M |  |

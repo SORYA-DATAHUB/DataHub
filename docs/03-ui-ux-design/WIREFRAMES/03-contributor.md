@@ -96,7 +96,7 @@
 │ ┌ 1  About this dataset ──────────────────────────────────────────┐ ┌ Guidelines ─────────┐  │
 │ │ Title (required)                                                │ │ ✓ Files you own or  │  │
 │ │ {សៀវភៅសិក្សា ថ្នាក់ទី៩ ឆ្នាំ២០០៥...............................}  │ │   may license       │  │
-│ │ Description (required)                                          │ │ ✓ Max 5 GB per file │  │
+│ │ Description (required)                                          │ │ ✓ Max 4 GB per file │  │
 │ │ {Scanned textbook pages, 300 dpi, ...........................}  │ │ ✓ Max 50 GB total   │  │
 │ │ Primary language          Category                              │ │ ✗ No executables,   │  │
 │ │ [Khmer ▾]                 [Education / textbooks ▾]             │ │   scripts, HTML     │  │

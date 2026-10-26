@@ -1,0 +1,13 @@
+{
+  "name": "datahub",
+  "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @datahub/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

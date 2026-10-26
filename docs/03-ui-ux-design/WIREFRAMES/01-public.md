@@ -156,7 +156,7 @@ Signed-in visitor: [Log in][Get started] replaced by [Open DataHub →].
 │ └────────────┴───────────────────┴──────────┴───────────────────────┴────────────┴─────────┘ │
 │ (Mobile: each format becomes a card with the same five facts.)                               │
 │                                                                                              │
-│ Limits: 5 GB per file · 50 GB per dataset · 2,000 files per dataset · ZIP ≤ 10,000 members, │
+│ Limits: 4 GB per file · 50 GB per dataset · 2,000 files per dataset · ZIP ≤ 10,000 members, │
 │ nested ZIPs not expanded · Executables, scripts, HTML/SVG, macro-enabled Office rejected.    │
 │ Files are identified by content, not by extension.                                           │
 │ FOOTER                                                                                       │

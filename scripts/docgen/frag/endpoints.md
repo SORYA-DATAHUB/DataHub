@@ -5058,6 +5058,86 @@ Full replacement. Granting/removing `admin` or `super_admin` requires `role.mana
 
 **Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
 
+#### `GET /api/v1/admin/deletion-requests` — Account deletion request queue
+
+- **Access:** `user.manage` · admin MFA session
+- **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `status` — Default `requested,processing`.; `user_id` — Filter by subject.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `requested_at`, `scheduled_for`, `updated_at`)
+
+Lists account-erasure requests and current machine-evaluated blockers. User contact fields are visible only until anonymisation. Access is audited.
+
+**Response `200 OK`** (`PaginatedDeletionRequest`):
+```json
+{
+  "items": [
+    {
+      "id": "01930b80-1111-7a00-8000-000000000b01",
+      "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
+      "user_email": "sophea@example.com",
+      "status": "requested",
+      "reason": "I no longer want to use the service.",
+      "requested_at": "2026-10-26T08:30:00Z",
+      "scheduled_for": "2026-11-09T08:30:00Z",
+      "blockers": [],
+      "decided_by": null,
+      "decided_at": null,
+      "decision_notes": null,
+      "completed_at": null,
+      "updated_at": "2026-10-26T08:30:00Z"
+    }
+  ],
+  "page": 1,
+  "page_size": 25,
+  "total": 1
+}
+```
+
+**Status codes:** 200, 401, 403, 422, 429, 500
+
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `rate_limited`, `internal_error`
+
+#### `POST /api/v1/admin/deletion-requests/{deletion_id}/decision` — Approve or reject an account deletion request
+
+- **Access:** `user.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
+- **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+
+`requested → rejected` immediately for reject. Approve records the decision but keeps `requested` until the 14-day grace expires; the daily processor then performs guarded `requested → processing → completed`. Approval never bypasses an open payout, positive balance, active dataset review/annotation, or legal hold. Actor cannot decide their own request. Every decision and later processing transition is audited and notified.
+
+**Request** (`DeletionRequestDecision`, application/json):
+```json
+{
+  "decision": "approve",
+  "reason": "Rights and financial checks completed; retain statutory ledger records only."
+}
+```
+
+**Response `200 OK`** (`DeletionRequest`):
+```json
+{
+  "id": "01930b80-1111-7a00-8000-000000000b01",
+  "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
+  "user_email": "sophea@example.com",
+  "status": "requested",
+  "reason": "I no longer want to use the service.",
+  "requested_at": "2026-10-26T08:30:00Z",
+  "scheduled_for": "2026-11-09T08:30:00Z",
+  "blockers": [],
+  "decided_by": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02",
+  "decided_at": "2026-10-26T09:15:00Z",
+  "decision_notes": "Rights and financial checks completed; retain statutory ledger records only.",
+  "completed_at": null,
+  "updated_at": "2026-10-26T09:15:00Z"
+}
+```
+
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+
+**Endpoint-specific errors:** `deletion.invalid_state` (409), `deletion.has_blockers` (409), `permission.separation_of_duties` (403)
+
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `auth.step_up_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+
 ### 10.15 Admin datasets
 
 #### `GET /api/v1/admin/datasets` — Search all datasets
@@ -5705,6 +5785,127 @@ Read-only; audit rows are append-only (UPDATE/DELETE blocked by trigger). Viewin
 **Status codes:** 200, 401, 403, 422, 429, 500
 
 **Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `rate_limited`, `internal_error`
+
+#### `GET /api/v1/admin/background-jobs` — Background job records
+
+- **Access:** `user.manage` · admin MFA session
+- **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `status` — Filter.; `task_name` — Exact task name or prefix ending `*`.; `queue` — Filter.; `entity_type` — Filter.; `entity_id` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `updated_at`, `task_name`, `status`)
+
+Operational records only; args contain identifiers, never credentials or document contents. `last_error` is redacted and truncated to 4,000 characters.
+
+**Response `200 OK`** (`PaginatedBackgroundJob`):
+```json
+{
+  "items": [
+    {
+      "id": "01930b81-2222-7b00-8000-000000000c01",
+      "task_name": "datahub.processing.process_file",
+      "queue": "processing",
+      "celery_task_id": "1d4f99e1-2a65-4f89-a9ef-4c91d1ff1111",
+      "args": {"file_id": "01930b72-3333-7c00-8000-0000000000f1"},
+      "entity_type": "dataset_file",
+      "entity_id": "01930b72-3333-7c00-8000-0000000000f1",
+      "status": "failed",
+      "attempts": 3,
+      "max_attempts": 3,
+      "last_error": "ClamAV connection timed out after 30 s",
+      "enqueued_at": "2026-10-26T08:30:00Z",
+      "started_at": "2026-10-26T08:30:00Z",
+      "finished_at": "2026-10-26T09:15:00Z",
+      "next_retry_at": null,
+      "created_at": "2026-10-26T08:30:00Z",
+      "updated_at": "2026-10-26T09:15:00Z"
+    }
+  ],
+  "page": 1,
+  "page_size": 25,
+  "total": 1
+}
+```
+
+**Status codes:** 200, 401, 403, 422, 429, 500
+
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `rate_limited`, `internal_error`
+
+#### `POST /api/v1/admin/background-jobs/{job_id}/requeue` — Re-enqueue a failed idempotent job
+
+- **Access:** `user.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
+- **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+
+Allowed only for `failed|dead` records whose task name is in the server's explicit idempotent safe-requeue registry. In one transaction, locks the source record, proves no equivalent in-flight `(task_name,args_hash)` record exists, creates a new queued record linked in audit metadata, commits, then enqueues after commit. The source is immutable history. Reason and actor are audited.
+
+**Request** (`BackgroundJobRequeue`, application/json):
+```json
+{"reason": "ClamAV is healthy again after the incident."}
+```
+
+**Response `202 Accepted`** (`BackgroundJob`):
+```json
+{
+  "id": "01930b81-2222-7b00-8000-000000000c02",
+  "task_name": "datahub.processing.process_file",
+  "queue": "processing",
+  "celery_task_id": null,
+  "args": {"file_id": "01930b72-3333-7c00-8000-0000000000f1"},
+  "entity_type": "dataset_file",
+  "entity_id": "01930b72-3333-7c00-8000-0000000000f1",
+  "status": "queued",
+  "attempts": 0,
+  "max_attempts": 3,
+  "last_error": null,
+  "enqueued_at": "2026-10-26T09:15:00Z",
+  "started_at": null,
+  "finished_at": null,
+  "next_retry_at": null,
+  "created_at": "2026-10-26T09:15:00Z",
+  "updated_at": "2026-10-26T09:15:00Z"
+}
+```
+
+**Status codes:** 202, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+
+**Endpoint-specific errors:** `job.not_requeueable` (409), `job.already_inflight` (409)
+
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `auth.step_up_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+
+#### `POST /api/v1/admin/legal-holds` — Set or release a legal hold
+
+- **Access:** `settings.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
+- **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+
+Super-administrator only. Locks the target and atomically sets/releases `legal_hold` and `legal_hold_reason`. An active user hold also protects records whose retention depends on that user; an active dataset hold protects its versions/files/reviews/annotations. Purge, anonymisation and secure deletion consult the flag. Both actions require a reason, emit immutable before/after audit, and do not restore data already deleted before the hold.
+
+**Request** (`LegalHoldChange`, application/json):
+```json
+{
+  "entity_type": "dataset",
+  "entity_id": "01930b71-2222-7b00-8000-0000000000d1",
+  "action": "set",
+  "reason": "Preservation notice LEG-2026-0042 approved by counsel."
+}
+```
+
+**Response `200 OK`** (`LegalHold`):
+```json
+{
+  "entity_type": "dataset",
+  "entity_id": "01930b71-2222-7b00-8000-0000000000d1",
+  "active": true,
+  "reason": "Preservation notice LEG-2026-0042 approved by counsel.",
+  "changed_by": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02",
+  "changed_at": "2026-10-26T09:15:00Z"
+}
+```
+
+**Status codes:** 200, 400, 401, 403, 409, 413, 415, 422, 429, 500
+
+**Endpoint-specific errors:** `legal_hold.invalid_state` (409)
+
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `auth.step_up_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
 
 #### `GET /api/v1/admin/settings` — System settings
 

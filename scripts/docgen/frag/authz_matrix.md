@@ -130,6 +130,8 @@
 | POST | `/api/v1/admin/users/{user_id}/revoke-sessions` | `user.manage` | — | — | — | Sᴿ | Sᴿ | target ≠ self; target holding admin/super_admin requires super_admin |
 | GET | `/api/v1/admin/verifications` | `user.verify` | — | — | — | M | M |  |
 | POST | `/api/v1/admin/verifications/{verification_id}/decision` | `user.verify` | — | — | — | Mᴿ | Mᴿ | subject ≠ actor |
+| GET | `/api/v1/admin/deletion-requests` | `user.manage` | — | — | — | M | M |  |
+| POST | `/api/v1/admin/deletion-requests/{deletion_id}/decision` | `user.manage` | — | — | — | S | S |  |
 | GET | `/api/v1/admin/datasets` | `dataset.read.any` | — | — | — | M | M |  |
 | GET | `/api/v1/admin/datasets/{dataset_id}` | `dataset.read.any` | — | — | — | M | M |  |
 | POST | `/api/v1/admin/datasets/{dataset_id}/takedown` | `dataset.read.any` | — | — | — | S | S |  |
@@ -143,6 +145,9 @@
 | GET | `/api/v1/admin/analytics/overview` | `analytics.read` | — | — | — | M | M |  |
 | GET | `/api/v1/admin/audit-logs` | `audit.read` | — | — | — | — | M |  |
 | GET | `/api/v1/admin/security-events` | `audit.read` | — | — | — | — | M |  |
+| GET | `/api/v1/admin/background-jobs` | `user.manage` | — | — | — | M | M |  |
+| POST | `/api/v1/admin/background-jobs/{job_id}/requeue` | `user.manage` | — | — | — | S | S |  |
+| POST | `/api/v1/admin/legal-holds` | `settings.manage` | — | — | — | — | S |  |
 | GET | `/api/v1/admin/settings` | `settings.manage` | — | — | — | — | M |  |
 | PUT | `/api/v1/admin/settings/{key}` | `settings.manage` | — | — | — | — | S |  |
 | GET | `/api/v1/admin/roles` | `user.read` | — | — | — | M | M |  |

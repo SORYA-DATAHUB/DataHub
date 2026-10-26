@@ -202,7 +202,7 @@ Capacity check: from A to H (≈ 24 weeks) the team has 2 BE × 120 = 240 BE-day
 
 MVP = all **Must** requirements in SRS.md (FR, NFR and SEC), which equals PRD §13 "Must":
 - Accounts, admin MFA, onboarding, verification, payout methods, deletion requests.
-- Datasets with resumable uploads (≤ 5 GB/file, ≤ 50 GB/dataset), safe processing, previews, exact-duplicate exclusion.
+- Datasets with resumable uploads (≤ 4,000,000,000 bytes/file, ≤ 50 GB/dataset), safe processing, previews, exact-duplicate exclusion.
 - File-level review with all four decisions, quality scores and feedback.
 - Versioned pricing ($1.00 raw / $1.50 labeled per accepted GB), double-entry ledger, wallets, reconciliation.
 - Manual payouts with dual approval at or above $100, failure, cancellation, reversal and adjustments.

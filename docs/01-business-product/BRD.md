@@ -134,7 +134,7 @@ flowchart LR
 ### 8.1 In scope (v1)
 1. Registration, email verification, login, password reset, sessions, MFA for admins.
 2. Onboarding (contributor agreement + rights declaration) and contributor eligibility verification.
-3. Dataset creation, metadata, resumable multipart uploads (file ≤ 5 GB, dataset ≤ 50 GB), ZIP expansion, processing (type sniffing, SHA-256, ClamAV, previews, duplicate detection).
+3. Dataset creation, metadata, resumable multipart uploads (file ≤ 4,000,000,000 bytes, dataset ≤ 50 GB), ZIP expansion, processing (type sniffing, SHA-256, ClamAV, previews, duplicate detection).
 4. Dataset review with file-level decisions, quality scores, feedback; decisions approve / partial / reject / request changes.
 5. Pricing rules with versioning; earnings calculation; append-only double-entry ledger; wallets.
 6. Manual payout workflow with reservation, approval (dual above $100), mark-paid with reference/proof, failure, cancellation and reversal; super-admin adjustments.
@@ -335,7 +335,7 @@ Business risks use the `BRISK-xx` namespace (baseline AM-12); `RISK_REGISTER.md`
 | Median payout turnaround (requested → paid) | ≤ 5 business days | `payout_requests` |
 | Duplicate payments / double credits | 0 | ledger idempotency + audits |
 | Nightly reconciliation mismatches | 0 unresolved > 24 h | `finance.reconcile` |
-| Upload success (files ≤ 5 GB, resumable path) | ≥ 99 % | upload_sessions |
+| Upload success (files ≤ 4,000,000,000 bytes, resumable path) | ≥ 99 % | upload_sessions |
 | Annotated pages approved | ≥ 150,000 | `annotation_reviews` |
 | First-pass annotation approval rate | ≥ 80 % | `annotation_reviews` |
 | Support first response | ≤ 1 business day (median) | `conversations` |
@@ -353,7 +353,7 @@ Priority: **M** = Must (MVP), **S** = Should (MVP if capacity), **C** = Could (p
 | BR-02 | Contributor eligibility (identity, age 18+, payout method) is reviewed by admins and gates withdrawals and annotation assignment, not uploads. | M | Part 3; A-08 |
 | BR-03 | Admins can suspend and reactivate accounts for violations. Suspended users cannot transact. | M | Part 3 |
 | BR-04 | Role-based access with roles contributor, annotator, reviewer, admin, super_admin. One account may hold several roles, and permissions are enforced server-side. | M | Part 4 |
-| BR-05 | Contributors can upload the listed formats (PDF, DOCX, DOC, TXT, RTF, ODT, JPG/JPEG, PNG, TIFF, BMP, CSV, JSON, JSONL, XML, XLSX, ZIP, admin-approved others) through resumable uploads up to 5 GB per file and 50 GB per dataset, with progress tracking. | M | Part 3, 9 |
+| BR-05 | Contributors can upload the listed formats (PDF, DOCX, DOC, TXT, RTF, ODT, JPG/JPEG, PNG, TIFF, BMP, CSV, JSON, JSONL, XML, XLSX, ZIP, admin-approved others) through resumable uploads up to 4,000,000,000 bytes per file and 50 GB per dataset, with progress tracking. | M | Part 3, 9; AM-01 |
 | BR-06 | Uploaded files are never executed. File type is verified by content, every file is malware-scanned fail-closed, and archives are safely expanded. | M | Part 3, 9; A-10 |
 | BR-07 | Uploaded data is private. Contributors see only their own datasets, annotators only assigned tasks, reviewers only their queues, and admins control broader access and exports. | M | Part 3 |
 | BR-08 | Each dataset records metadata (title, description, language, category, data class, source/provenance, licence, personal-data flag) and the contributor's rights declaration. | M | Part 16 |

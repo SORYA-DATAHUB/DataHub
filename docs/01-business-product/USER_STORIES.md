@@ -2307,7 +2307,7 @@
 
 | Trace | Value |
 |---|---|
-| API | `GET /admin/takedown-requests`, `POST /admin/takedown-requests/{id}/decision`, *GAP-03 (see §Open gaps)* |
+| API | `GET /admin/takedown-requests`, `POST /admin/takedown-requests/{id}/decision`, `POST /public/takedown-requests` |
 | UI routes | `/admin/datasets/[id]`, `/admin/messages` |
 | SRS requirements | FR-ADM-10 |
 | Associated tests (planned) | TC-ADM-010 |
@@ -2603,7 +2603,7 @@
 1. Admin opens `/admin/exports?new=1`; selects datasets by id and/or filters (category, language, min quality, class, finalized range) and options (files, annotations, metadata, text form verbatim/NFC/both).
 2. System creates an export job (`queued`, code `EX-YYYY-NNNNNN`) and runs `exports.build_export` on the `exports` queue; at most 2 run concurrently.
 3. Progress percentage is shown; each file's SHA-256 is re-verified before adding.
-4. Output: ZIP parts ≤ 5 GB with `manifest.jsonl`, `metadata.csv` and, if selected, `annotations.jsonl`; contributors appear only as pseudonymous ids.
+4. Output: ZIP parts ≤ 4,000,000,000 bytes with `manifest.jsonl`, `metadata.csv` and, if selected, `annotations.jsonl`; contributors appear only as pseudonymous ids.
 
 **Alternate scenarios**
 - A1: Selection matches nothing → `422` (`export.empty_selection`).
@@ -2716,29 +2716,32 @@
 
 **Process account deletion requests** · Priority: **Must**
 
-> As a **admin**, I want to process or refuse pending deletion requests, so that users' privacy requests are fulfilled while financial records are retained.
+> As an **admin**, I want to approve or reject requested account deletions, so that privacy requests are fulfilled while financial and legal obligations are respected.
 
 **Preconditions**
-- `user.manage`; a `deletion_requests` row `pending`.
+- `user.manage`, recent step-up MFA for the decision; a `deletion_requests` row `requested`.
 
 **Main scenario**
-1. Admin sees pending deletion requests on `/admin/users/[id]` (and the dashboard).
-2. Admin processes: blockers (open payout, dataset in review, active assignment) are checked; user `deactivated`, sessions revoked; PII anonymized; draft/withdrawn datasets deleted.
-3. Or admin refuses with a reason; user notified.
-4. The daily job `admin.process_deletion_requests` resumes any half-processed request idempotently.
+1. Admin opens the deletion queue and sees status, grace deadline and blockers.
+2. Admin records approval with a reason; approval retains `requested` until the 14-day grace expires and never bypasses blockers.
+3. The daily processor rechecks balances, payouts, reviews, assignments and legal hold, then performs `requested → processing → completed`: deactivate, revoke sessions, anonymize PII and queue eligible objects for deletion.
+4. Alternatively the admin rejects with a reason; status becomes `rejected` and the user is notified.
+5. A retry resumes a half-processed request idempotently.
 
 **Alternate scenarios**
-- A1: Blockers exist → request stays pending with blockers listed; user informed.
+- A1: Blockers exist → request stays `requested` with blockers listed; user informed.
+- A2: Subject attempts to decide their own request → denied by separation of duties.
 
 **Acceptance criteria**
-- **AC1** — **Given** a pending request without blockers, **when** it is processed, **then** status `processed`, user `anonymized`, all sessions revoked.
+- **AC1** — **Given** an approved, due request without blockers, **when** the daily processor runs, **then** status is `completed`, user is `anonymized`, and all sessions are revoked.
 - **AC2** — **Given** a processing crash between deactivation and anonymization, **when** the daily job runs, **then** anonymization completes with the same values.
-- **AC3** — **Given** a refusal with reason "Legal hold on account", **when** it is saved, **then** status `refused` and the user is notified.
+- **AC3** — **Given** a rejection with a mandatory reason, **when** it is saved, **then** status is `rejected` and the user is notified.
+- **AC4** — **Given** an approval before the grace deadline, **when** it is saved, **then** the request remains `requested` and no anonymization occurs early.
 
 | Trace | Value |
 |---|---|
-| API | `GET /admin/users/{id}`, *GAP-01 (see §Open gaps)* |
-| UI routes | `/admin/users/[id]` |
+| API | `GET /admin/deletion-requests`, `POST /admin/deletion-requests/{id}/decision`, `GET /admin/users/{id}` |
+| UI routes | `/admin/users/[id]`, `/admin` |
 | SRS requirements | FR-ADM-11, FR-USER-07 |
 | Associated tests (planned) | TC-ADM-011, TC-USER-007 |
 
@@ -2746,28 +2749,30 @@
 
 **Inspect and retry background jobs** · Priority: **Should**
 
-> As a **admin**, I want to see background job records and outbox email status and re-enqueue failed idempotent jobs, so that transient failures do not leave work stuck.
+> As an **admin**, I want to inspect background job records and safely re-enqueue failed idempotent jobs, so that transient failures do not leave work stuck.
 
 **Preconditions**
-- Admin.
+- `user.manage`; recent step-up MFA for manual requeue.
 
 **Main scenario**
 1. Admin opens the jobs view from the dashboard "failed jobs (24 h)" card.
-2. List shows task, status, attempts and last error, filtered by status and task.
-3. Admin re-enqueues a failed idempotent job.
+2. List shows task, queue, entity, status, attempts and redacted last error, filtered by status, task, queue, entity and date.
+3. Admin supplies a reason and re-enqueues a `failed|dead` job in the explicit safe-requeue registry.
 4. `admin.requeue_stalled` (every 5 min) re-enqueues outbox rows pending > 2 min, files uploaded > 5 min and exports queued > 5 min (AM-10).
 
 **Alternate scenarios**
-- A1: Non-idempotent job → Retry disabled.
+- A1: Non-idempotent or nonterminal job → retry denied.
+- A2: Equivalent job already queued/running → retry denied without creating another job record.
 
 **Acceptance criteria**
 - **AC1** — **Given** a failed `processing.process_file` job, **when** it is re-enqueued, **then** the file is processed once with no duplicate rows.
 - **AC2** — **Given** an email outbox row that failed 5 times, **when** the admin views it, **then** status `failed` and last error are shown.
 - **AC3** — **Given** a file stuck in `uploaded` for 6 min, **when** `admin.requeue_stalled` runs, **then** processing is enqueued.
+- **AC4** — **Given** an equivalent job is already in flight, **when** manual requeue is requested, **then** no duplicate is created and the API returns conflict.
 
 | Trace | Value |
 |---|---|
-| API | *GAP-02 (see §Open gaps)* |
+| API | `GET /admin/background-jobs`, `POST /admin/background-jobs/{id}/requeue` |
 | UI routes | `/admin` |
 | SRS requirements | FR-ADM-12, FR-NOTIF-03, NFR-INT-03 |
 | Associated tests (planned) | TC-ADM-012, TC-NOTIF-003, TC-INT-003 |
@@ -3106,9 +3111,4 @@
 
 ## 9. Open gaps referenced by stories
 
-| Gap | Description | Owner |
-|---|---|---|
-| GAP-01 | Admin processing/refusal of a deletion request (FR-ADM-11) has no admin endpoint in API_DOCUMENTATION.md §10.0; LLD §12.3 processes due requests via the daily job `admin.process_deletion_requests`. Endpoint to be added. | Backend lead (API_DOCUMENTATION.md / openapi.yaml) |
-| GAP-02 | The background-job view and re-enqueue action (FR-ADM-12) have no endpoint in API_DOCUMENTATION.md §10.0. Endpoint to be added. | Backend lead (API_DOCUMENTATION.md / openapi.yaml) |
-| GAP-03 | `GET /admin/takedown-requests`, `POST /admin/takedown-requests/{id}/decision` and `POST /public/takedown-requests` are mandated by AM-04 / LLD S-01 but are not yet in the API_DOCUMENTATION.md §10.0 index. | Backend lead (API_DOCUMENTATION.md / openapi.yaml) |
-
+No open API-contract gaps remain in this story baseline. Implementation and executed-test statuses remain `Planned` until application work begins.

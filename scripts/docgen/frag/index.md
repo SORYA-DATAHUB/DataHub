@@ -130,19 +130,24 @@
 | 128 | POST | `/api/v1/admin/users/{user_id}/revoke-sessions` | `user.manage` | admin MFA, step-up |
 | 129 | GET | `/api/v1/admin/verifications` | `user.verify` | admin MFA |
 | 130 | POST | `/api/v1/admin/verifications/{verification_id}/decision` | `user.verify` | admin MFA |
-| 131 | GET | `/api/v1/admin/datasets` | `dataset.read.any` | admin MFA |
-| 132 | GET | `/api/v1/admin/datasets/{dataset_id}` | `dataset.read.any` | admin MFA |
-| 133 | POST | `/api/v1/admin/datasets/{dataset_id}/takedown` | `dataset.read.any` | admin MFA, step-up |
-| 134 | POST | `/api/v1/admin/files/{file_id}/rescan` | `dataset.read.any` | admin MFA |
-| 135 | GET | `/api/v1/admin/takedown-requests` | `user.manage` | admin MFA |
-| 136 | POST | `/api/v1/admin/takedown-requests/{takedown_id}/decision` | `user.manage` | admin MFA, step-up |
-| 137 | POST | `/api/v1/admin/exports` | `dataset.export` | admin MFA, step-up |
-| 138 | GET | `/api/v1/admin/exports` | `dataset.export` | admin MFA |
-| 139 | GET | `/api/v1/admin/exports/{export_id}` | `dataset.export` | admin MFA |
-| 140 | POST | `/api/v1/admin/exports/{export_id}/download-url` | `dataset.export` | admin MFA |
-| 141 | GET | `/api/v1/admin/analytics/overview` | `analytics.read` | admin MFA |
-| 142 | GET | `/api/v1/admin/audit-logs` | `audit.read` | admin MFA |
-| 143 | GET | `/api/v1/admin/security-events` | `audit.read` | admin MFA |
-| 144 | GET | `/api/v1/admin/settings` | `settings.manage` | admin MFA |
-| 145 | PUT | `/api/v1/admin/settings/{key}` | `settings.manage` | admin MFA, step-up, If-Match optional |
-| 146 | GET | `/api/v1/admin/roles` | `user.read` | admin MFA |
+| 131 | GET | `/api/v1/admin/deletion-requests` | `user.manage` | admin MFA |
+| 132 | POST | `/api/v1/admin/deletion-requests/{deletion_id}/decision` | `user.manage` | admin MFA, step-up |
+| 133 | GET | `/api/v1/admin/datasets` | `dataset.read.any` | admin MFA |
+| 134 | GET | `/api/v1/admin/datasets/{dataset_id}` | `dataset.read.any` | admin MFA |
+| 135 | POST | `/api/v1/admin/datasets/{dataset_id}/takedown` | `dataset.read.any` | admin MFA, step-up |
+| 136 | POST | `/api/v1/admin/files/{file_id}/rescan` | `dataset.read.any` | admin MFA |
+| 137 | GET | `/api/v1/admin/takedown-requests` | `user.manage` | admin MFA |
+| 138 | POST | `/api/v1/admin/takedown-requests/{takedown_id}/decision` | `user.manage` | admin MFA, step-up |
+| 139 | POST | `/api/v1/admin/exports` | `dataset.export` | admin MFA, step-up |
+| 140 | GET | `/api/v1/admin/exports` | `dataset.export` | admin MFA |
+| 141 | GET | `/api/v1/admin/exports/{export_id}` | `dataset.export` | admin MFA |
+| 142 | POST | `/api/v1/admin/exports/{export_id}/download-url` | `dataset.export` | admin MFA |
+| 143 | GET | `/api/v1/admin/analytics/overview` | `analytics.read` | admin MFA |
+| 144 | GET | `/api/v1/admin/audit-logs` | `audit.read` | admin MFA |
+| 145 | GET | `/api/v1/admin/security-events` | `audit.read` | admin MFA |
+| 146 | GET | `/api/v1/admin/background-jobs` | `user.manage` | admin MFA |
+| 147 | POST | `/api/v1/admin/background-jobs/{job_id}/requeue` | `user.manage` | admin MFA, step-up |
+| 148 | POST | `/api/v1/admin/legal-holds` | `settings.manage` | admin MFA, step-up |
+| 149 | GET | `/api/v1/admin/settings` | `settings.manage` | admin MFA |
+| 150 | PUT | `/api/v1/admin/settings/{key}` | `settings.manage` | admin MFA, step-up, If-Match optional |
+| 151 | GET | `/api/v1/admin/roles` | `user.read` | admin MFA |

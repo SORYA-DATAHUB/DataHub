@@ -99,6 +99,8 @@ ENUMS = {
     "TakedownClaimType": en("copyright", "privacy", "illegal_content", "consent_withdrawn", "other"),
     "TakedownStatus": en("received", "under_review", "actioned", "rejected", "withdrawn"),
     "TakedownSource": en("public_form", "user", "admin"),
+    "DeletionRequestStatus": en("requested", "processing", "completed", "rejected", "cancelled"),
+    "BackgroundJobStatus": en("queued", "running", "retrying", "succeeded", "failed", "dead"),
     "PayoutStatus": en("requested", "approved", "paid", "rejected", "cancelled", "failed", "reversed"),
     "PayoutMethodType": en("bank_transfer", "aba_pay", "wise", "paypal", "other"),
     "ExportStatus": en("queued", "running", "completed", "failed", "expired"),
@@ -234,8 +236,12 @@ def build():
         "id_document": {"type": "string", "contentMediaType": "application/octet-stream", "description": "Optional PDF/JPEG/PNG ≤ 10 MB."},
     }, ["legal_name", "country", "date_of_birth", "phone"])
     S["DeletionRequestCreate"] = obj({"confirm_email": s(fmt="email"), "reason": nul(s(maxl=1000))}, ["confirm_email"], closed=True)
-    S["DeletionRequest"] = obj({"id": UUID, "status": en("pending", "processing", "completed", "rejected"), "created_at": DT,
-                                "scheduled_for": nul(DT)}, ["id", "status", "created_at"])
+    S["DeletionRequest"] = obj({
+        "id": UUID, "user_id": UUID, "user_email": nul(s(fmt="email")), "status": E("DeletionRequestStatus"),
+        "reason": nul(s(maxl=1000)), "requested_at": DT, "scheduled_for": DT,
+        "blockers": arr(s(maxl=64)), "decided_by": nul(UUID), "decided_at": nul(DT),
+        "decision_notes": nul(s(maxl=2000)), "completed_at": nul(DT), "updated_at": DT,
+    }, ["id", "user_id", "status", "requested_at", "scheduled_for", "blockers", "updated_at"])
     S["NotificationPreferences"] = obj({
         "email": {"type": "object", "additionalProperties": BOOL, "description": "Map NotificationType → send email. Security, payment and account-status emails are mandatory and ignore false."},
         "mandatory_email_types": arr(E("NotificationType")),
@@ -523,6 +529,30 @@ def build():
     S["RolesUpdate"] = obj({"roles": arr(E("RoleName"), minItems=1, uniqueItems=True), "reason": s(minl=5, maxl=1000)}, ["roles", "reason"], closed=True)
     S["VerificationDecision"] = obj({"decision": en("approved", "rejected", "needs_info"), "reason": nul(s(maxl=2000, desc="Required for rejected/needs_info."))},
                                     ["decision"], closed=True)
+    S["DeletionRequestDecision"] = obj({
+        "decision": en("approve", "reject"),
+        "reason": s(minl=10, maxl=2000, desc="Mandatory audit/user-facing rationale. Approval does not bypass blockers or the grace period."),
+    }, ["decision", "reason"], closed=True)
+    S["BackgroundJob"] = obj({
+        "id": UUID, "task_name": s(maxl=128), "queue": en("default", "processing", "exports", "email"),
+        "celery_task_id": nul(s(maxl=155)), "args": {"type": "object", "description": "Identifier-only arguments; secrets are never recorded."},
+        "entity_type": nul(s(maxl=64)), "entity_id": nul(UUID), "status": E("BackgroundJobStatus"),
+        "attempts": {"type": "integer", "minimum": 0}, "max_attempts": {"type": "integer", "minimum": 1},
+        "last_error": nul(s(maxl=4000)), "enqueued_at": DT, "started_at": nul(DT), "finished_at": nul(DT),
+        "next_retry_at": nul(DT), "created_at": DT, "updated_at": DT,
+    }, ["id", "task_name", "queue", "args", "status", "attempts", "max_attempts", "enqueued_at", "created_at", "updated_at"])
+    S["BackgroundJobRequeue"] = obj({
+        "reason": s(minl=10, maxl=1000),
+    }, ["reason"], closed=True)
+    S["LegalHoldChange"] = obj({
+        "entity_type": en("user", "dataset"), "entity_id": UUID,
+        "action": en("set", "release"),
+        "reason": s(minl=10, maxl=2000, desc="Mandatory for both set and release; identifies authority/ticket without embedding sensitive document contents."),
+    }, ["entity_type", "entity_id", "action", "reason"], closed=True)
+    S["LegalHold"] = obj({
+        "entity_type": en("user", "dataset"), "entity_id": UUID, "active": BOOL,
+        "reason": nul(s(maxl=2000)), "changed_by": UUID, "changed_at": DT,
+    }, ["entity_type", "entity_id", "active", "changed_by", "changed_at"])
     S["TakedownRequest"] = obj({"reason_code": en("rights_claim", "personal_data", "illegal_content", "policy_violation", "owner_request", "other"),
                                 "reason": s(minl=10, maxl=5000), "notify_owner": {"type": "boolean", "default": True}}, ["reason_code", "reason"], closed=True)
     S["TakedownClaimCreate"] = obj({
@@ -588,7 +618,8 @@ def build():
 
 PAGINATED = ["User", "Dataset", "DatasetFile", "ReviewQueueItem", "Review", "LedgerLine", "EarningRecord", "Payout",
              "AnnotationProject", "AnnotationTask", "AnnotationVersion", "AnnotationReview", "Reward", "Conversation",
-             "Message", "Notification", "ExportJob", "AuditLog", "SecurityEvent", "ContributorVerification", "Adjustment", "TakedownCase"]
+             "Message", "Notification", "ExportJob", "AuditLog", "SecurityEvent", "ContributorVerification", "Adjustment", "TakedownCase",
+             "DeletionRequest", "BackgroundJob"]
 
 def paginated(S):
     for n in PAGINATED:

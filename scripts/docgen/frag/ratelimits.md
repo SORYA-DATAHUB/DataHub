@@ -10,8 +10,8 @@
 | `auth_resend` | 3 / h per user. | `POST /auth/resend-verification` |
 | `auth_forgot` | 3 / h per email and 10 / h per IP (silently not sent above limit; response still 202). | `POST /auth/forgot-password` |
 | `auth_password` | 5 / h per user (change-password, MFA setup/disable, payout-method create). | `POST /auth/change-password`, `POST /auth/mfa/setup`, `POST /auth/mfa/disable`, `POST /me/payout-methods` |
-| `read` | 600 / min per user. | All other authenticated GETs (55 endpoints) |
-| `write` | 120 / min per user. | All other authenticated unsafe methods (53 endpoints) |
+| `read` | 600 / min per user. | All other authenticated GETs (57 endpoints) |
+| `write` | 120 / min per user. | All other authenticated unsafe methods (56 endpoints) |
 | `autosave` | 60 / min per user per task. | `PUT /annotation/tasks/{task_id}/draft` |
 | `upload` | 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof). | `POST /me/verification`, `POST /datasets/{dataset_id}/uploads`, `POST /uploads/{upload_id}/part-urls`, `GET /uploads/{upload_id}`, `POST /uploads/{upload_id}/complete`, `DELETE /uploads/{upload_id}`, `POST /admin/payouts/{payout_id}/proof` |
 | `download` | 120 / min per user (presigned URL issuance, preview redirects). | `GET /files/{file_id}/preview/{page}`, `POST /files/{file_id}/download-url`, `GET /attachments/{attachment_id}/download-url`, `POST /admin/exports/{export_id}/download-url` |

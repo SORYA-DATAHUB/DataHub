@@ -465,6 +465,22 @@ ep("POST", "/admin/verifications/{verification_id}/decision", "Admin users", "De
    req={"decision": "approved", "reason": None}, rex=dict(VERIFICATION, status="approved", decided_by=U_ADM, decided_at=T2),
    desc="`pending → approved|rejected|needs_info`; mirrors users.verification_status; notifies user. Verifier ≠ subject. ID document access audited.",
    val=["reason required (≥ 5 chars) for rejected/needs_info"], err=["verification.invalid_state", "permission.separation_of_duties"])
+ep("GET", "/admin/deletion-requests", "Admin users", "Account deletion request queue", perm="user.manage", admin=True, paged=True,
+   sort=["requested_at", "scheduled_for", "updated_at"], resp="PaginatedDeletionRequest",
+   rex=page([{"id": "01930b80-1111-7a00-8000-000000000b01", "user_id": U_CON, "user_email": "sophea@example.com", "status": "requested",
+              "reason": "I no longer want to use the service.", "requested_at": T, "scheduled_for": "2026-11-09T08:30:00Z",
+              "blockers": [], "decided_by": None, "decided_at": None, "decision_notes": None, "completed_at": None, "updated_at": T}]),
+   q=[q("status", {"$ref": "#/components/schemas/DeletionRequestStatus"}, "Default `requested,processing`."), q("user_id", UUID, "Filter by subject."), DFROM, DTO],
+   desc="Lists account-erasure requests and current machine-evaluated blockers. User contact fields are visible only until anonymisation. Access is audited.")
+ep("POST", "/admin/deletion-requests/{deletion_id}/decision", "Admin users", "Approve or reject an account deletion request",
+   perm="user.manage", admin=True, step=True, body="DeletionRequestDecision", resp="DeletionRequest",
+   req={"decision": "approve", "reason": "Rights and financial checks completed; retain statutory ledger records only."},
+   rex={"id": "01930b80-1111-7a00-8000-000000000b01", "user_id": U_CON, "user_email": "sophea@example.com", "status": "requested",
+        "reason": "I no longer want to use the service.", "requested_at": T, "scheduled_for": "2026-11-09T08:30:00Z", "blockers": [],
+        "decided_by": U_ADM, "decided_at": T2, "decision_notes": "Rights and financial checks completed; retain statutory ledger records only.",
+        "completed_at": None, "updated_at": T2},
+   desc="`requested → rejected` immediately for reject. Approve records the decision but keeps `requested` until the 14-day grace expires; the daily processor then performs guarded `requested → processing → completed`. Approval never bypasses an open payout, positive balance, active dataset review/annotation, or legal hold. Actor cannot decide their own request. Every decision and later processing transition is audited and notified.",
+   err=["deletion.invalid_state", "deletion.has_blockers", "permission.separation_of_duties"])
 
 # ============================ ADMIN DATASETS ============================
 ep("GET", "/admin/datasets", "Admin datasets", "Search all datasets", perm="dataset.read.any", admin=True, paged=True, sort=DS_SORT + ["finalized_at", "overall_quality"], resp="PaginatedDataset", rex=page([DATASET]),
@@ -518,6 +534,30 @@ ep("GET", "/admin/audit-logs", "Admin", "Audit log", perm="audit.read", admin=Tr
 ep("GET", "/admin/security-events", "Admin", "Security events", perm="audit.read", admin=True, paged=True, sort=["created_at"], resp="PaginatedSecurityEvent",
    rex=page([{"id": "01930b7d-eeee-7700-8000-000000000802", "user_id": U_CON, "email": "sophea@example.com", "event_type": "login_failed", "ip": "203.0.113.24", "user_agent": "curl/8.5", "details": {"consecutive_failures": 3}, "created_at": T}]),
    q=[q("user_id", UUID, "Filter."), q("event_type", {"$ref": "#/components/schemas/SecurityEventType"}, "Filter."), q("ip", s(maxl=45), "Filter."), DFROM, DTO])
+ep("GET", "/admin/background-jobs", "Admin", "Background job records", perm="user.manage", admin=True, paged=True,
+   sort=["created_at", "updated_at", "task_name", "status"], resp="PaginatedBackgroundJob",
+   rex=page([{"id": "01930b81-2222-7b00-8000-000000000c01", "task_name": "datahub.processing.process_file", "queue": "processing",
+              "celery_task_id": "1d4f99e1-2a65-4f89-a9ef-4c91d1ff1111", "args": {"file_id": F1}, "entity_type": "dataset_file", "entity_id": F1,
+              "status": "failed", "attempts": 3, "max_attempts": 3, "last_error": "ClamAV connection timed out after 30 s",
+              "enqueued_at": T, "started_at": T, "finished_at": T2, "next_retry_at": None, "created_at": T, "updated_at": T2}]),
+   q=[q("status", {"$ref": "#/components/schemas/BackgroundJobStatus"}, "Filter."), q("task_name", s(maxl=128), "Exact task name or prefix ending `*`."),
+      q("queue", en("default", "processing", "exports", "email"), "Filter."), q("entity_type", s(maxl=64), "Filter."), q("entity_id", UUID, "Filter."), DFROM, DTO],
+   desc="Operational records only; args contain identifiers, never credentials or document contents. `last_error` is redacted and truncated to 4,000 characters.")
+ep("POST", "/admin/background-jobs/{job_id}/requeue", "Admin", "Re-enqueue a failed idempotent job", perm="user.manage", admin=True,
+   step=True, body="BackgroundJobRequeue", ok=202, resp="BackgroundJob",
+   req={"reason": "ClamAV is healthy again after the incident."},
+   rex={"id": "01930b81-2222-7b00-8000-000000000c02", "task_name": "datahub.processing.process_file", "queue": "processing",
+        "celery_task_id": None, "args": {"file_id": F1}, "entity_type": "dataset_file", "entity_id": F1, "status": "queued",
+        "attempts": 0, "max_attempts": 3, "last_error": None, "enqueued_at": T2, "started_at": None, "finished_at": None,
+        "next_retry_at": None, "created_at": T2, "updated_at": T2},
+   desc="Allowed only for `failed|dead` records whose task name is in the server's explicit idempotent safe-requeue registry. In one transaction, locks the source record, proves no equivalent in-flight `(task_name,args_hash)` record exists, creates a new queued record linked in audit metadata, commits, then enqueues after commit. The source is immutable history. Reason and actor are audited.",
+   err=["job.not_requeueable", "job.already_inflight"])
+ep("POST", "/admin/legal-holds", "Admin", "Set or release a legal hold", perm="settings.manage", admin=True, step=True,
+   body="LegalHoldChange", resp="LegalHold",
+   req={"entity_type": "dataset", "entity_id": DS, "action": "set", "reason": "Preservation notice LEG-2026-0042 approved by counsel."},
+   rex={"entity_type": "dataset", "entity_id": DS, "active": True, "reason": "Preservation notice LEG-2026-0042 approved by counsel.", "changed_by": U_ADM, "changed_at": T2},
+   desc="Super-administrator only. Locks the target and atomically sets/releases `legal_hold` and `legal_hold_reason`. An active user hold also protects records whose retention depends on that user; an active dataset hold protects its versions/files/reviews/annotations. Purge, anonymisation and secure deletion consult the flag. Both actions require a reason, emit immutable before/after audit, and do not restore data already deleted before the hold.",
+   err=["legal_hold.invalid_state"])
 ep("GET", "/admin/settings", "Admin", "System settings", perm="settings.manage", admin=True, resp="SystemSettingList", rex={"items": [SETTING]})
 ep("PUT", "/admin/settings/{key}", "Admin", "Update a system setting", perm="settings.manage", admin=True, step=True, body="SettingUpdate", resp="SystemSetting", ifm="optional",
    req={"value": 150000000, "reason": "Owner raised dual-approval threshold to $150 (HA-07)."}, rex=dict(SETTING, value=150000000, version=2, updated_by="01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f09"), rh=["ETag"],
