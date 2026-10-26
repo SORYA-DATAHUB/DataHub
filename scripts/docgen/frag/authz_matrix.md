@@ -34,6 +34,7 @@
 | GET | `/api/v1/public/pricing` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | GET | `/api/v1/public/formats` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | POST | `/api/v1/public/contact` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| POST | `/api/v1/public/takedown-requests` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | POST | `/api/v1/datasets` | `dataset.create` | ✓ᴿ | — | — | ✓ᴿ | ✓ᴿ | lists only caller's datasets |
 | GET | `/api/v1/datasets` | `dataset.read.own` | ✓ᴿ | — | — | ✓ᴿ | ✓ᴿ | lists only caller's datasets |
 | GET | `/api/v1/datasets/{dataset_id}` | `dataset.read.own` | ✓ᴿ | — | — | ✓ᴿ | ✓ᴿ | owner; reads also: assigned reviewer, `dataset.read.any` |
@@ -133,6 +134,8 @@
 | GET | `/api/v1/admin/datasets/{dataset_id}` | `dataset.read.any` | — | — | — | M | M |  |
 | POST | `/api/v1/admin/datasets/{dataset_id}/takedown` | `dataset.read.any` | — | — | — | S | S |  |
 | POST | `/api/v1/admin/files/{file_id}/rescan` | `dataset.read.any` | — | — | — | M | M |  |
+| GET | `/api/v1/admin/takedown-requests` | `user.manage` | — | — | — | M | M |  |
+| POST | `/api/v1/admin/takedown-requests/{takedown_id}/decision` | `user.manage` | — | — | — | S | S |  |
 | POST | `/api/v1/admin/exports` | `dataset.export` | — | — | — | S | S |  |
 | GET | `/api/v1/admin/exports` | `dataset.export` | — | — | — | M | M |  |
 | GET | `/api/v1/admin/exports/{export_id}` | `dataset.export` | — | — | — | M | M |  |

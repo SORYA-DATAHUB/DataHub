@@ -4,6 +4,7 @@
 
 - **Access:** Public (no session)
 - **Rate limit:** Not rate-limited (health probes; internal metrics).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Process is up. No dependency checks. Never rate-limited, never authenticated.
 
@@ -20,6 +21,7 @@ Process is up. No dependency checks. Never rate-limited, never authenticated.
 
 - **Access:** Public (no session)
 - **Rate limit:** Not rate-limited (health probes; internal metrics).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Checks Postgres (SELECT 1 + Alembic head), Redis PING, S3 HeadBucket, clamd PING. Returns **503** with the same body shape when any required check fails (ClamAV failure ⇒ `degraded`: API serves, processing pauses).
 
@@ -51,6 +53,7 @@ Prometheus text exposition (`text/plain; version=0.0.4`). Caddy returns 404 for 
 
 - **Access:** Public (no session)
 - **Rate limit:** 60 / min per IP.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Sets/refreshes the `dh_csrf` cookie (not HttpOnly, Secure, SameSite=Lax, Path=/) and returns the same value. The token is `nonce.timestamp.HMAC-SHA256(secret, session_binding|nonce|timestamp)`; binding is the session id hash, or an anonymous pre-session id for unauthenticated forms. Call on app boot and after login/logout (both rotate it).
 
@@ -67,6 +70,7 @@ Sets/refreshes the `dh_csrf` cookie (not HttpOnly, Secure, SameSite=Lax, Path=/)
 
 - **Access:** Public (no session) · CSRF required
 - **Rate limit:** 5 / h per IP.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Creates a `pending_email` user with role `contributor` and sends a verification email (24 h link). **Enumeration-safe:** if the email already exists, the response is identical and the existing owner receives an 'account already exists' email instead. No session is created; the client shows 'check your inbox' and the user signs in normally (pending_email accounts may sign in with limited access).
 
@@ -98,7 +102,8 @@ Creates a `pending_email` user with role `contributor` and sends a verification 
 #### `POST /api/v1/auth/login` — Sign in with email and password
 
 - **Access:** Public (no session) · CSRF required
-- **Rate limit:** 5 / min per (IP + email) and 20 / min per IP; account lockout after 10 consecutive failures (15 min).
+- **Rate limit:** 5 / min per (IP + email) and 20 / min per IP; account lockout after 5 failures within 15 min (locked 15 min).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Verifies credentials (constant-time; dummy Argon2 hash when the email is unknown). On success: revokes the pre-login session if any, creates a new session (rotation), sets `dh_session` (HttpOnly, Secure, SameSite=Lax, Path=/) and a fresh `dh_csrf`. If the user has MFA enabled, the session is created in *MFA-pending* state and the response is `{mfa_required: true, me: null}`; the client must call `POST /auth/mfa/verify`. Admin/super_admin without MFA get `{mfa_enrollment_required: true}` and may only call MFA setup/enable, me, csrf, logout.
 
@@ -153,6 +158,7 @@ Verifies credentials (constant-time; dummy Argon2 hash when the email is unknown
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 5 / min per session and 20 / h per user; 10 consecutive failures revoke the MFA-pending session.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Completes login for MFA-pending sessions and doubles as **step-up**: on an already verified session it re-stamps `mfa_verified_at`, opening a 15-minute window for financial/privileged actions. TOTP: SHA-1, 6 digits, 30 s, ±1 step; the last accepted step is stored to prevent replay. A recovery code is single-use and triggers a security email. Session id is rotated on first verification.
 
@@ -203,6 +209,7 @@ Completes login for MFA-pending sessions and doubles as **step-up**: on an alrea
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Revokes the current session row, clears `dh_session` and rotates `dh_csrf`. Idempotent: an already-invalid session still gets 204 with cleared cookies.
 
@@ -216,6 +223,7 @@ Revokes the current session row, clears `dh_session` and rotates `dh_csrf`. Idem
 
 - **Access:** Public (no session) · CSRF required
 - **Rate limit:** 10 / h per IP (verify-email, reset-password).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Token = 32 random bytes, base64url (43 chars). Looks up SHA-256(token) with purpose `email_verify`, checks expiry (24 h) and `used_at IS NULL`, then sets `email_verified_at`, status `pending_email → active`, marks the token used and invalidates other outstanding verify tokens. Works without a session (link opened on another device).
 
@@ -239,6 +247,7 @@ Token = 32 random bytes, base64url (43 chars). Looks up SHA-256(token) with purp
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 3 / h per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 For the signed-in `pending_email` user. Invalidates previous tokens and issues a new one.
 
@@ -257,6 +266,7 @@ For the signed-in `pending_email` user. Invalidates previous tokens and issues a
 
 - **Access:** Public (no session) · CSRF required
 - **Rate limit:** 3 / h per email and 10 / h per IP (silently not sent above limit; response still 202).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Enumeration-safe; identical response and similar latency whether or not the account exists. Sends a 1-hour single-use token (purpose `password_reset`). Suspended/anonymized accounts receive nothing.
 
@@ -278,6 +288,7 @@ Enumeration-safe; identical response and similar latency whether or not the acco
 
 - **Access:** Public (no session) · CSRF required
 - **Rate limit:** 10 / h per IP (verify-email, reset-password).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Validates token (1 h, single use), applies password policy, re-hashes with Argon2id, revokes **all** sessions, clears lockout counter, emails a confirmation. If the account was `pending_email`, the reset also verifies the email (the user proved inbox control).
 
@@ -298,6 +309,7 @@ Validates token (1 h, single use), applies password policy, re-hashes with Argon
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 5 / h per user (change-password, MFA setup/disable, payout-method create).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Requires current password. Revokes all other sessions and rotates the current one (new cookie).
 
@@ -318,6 +330,7 @@ Requires current password. Revokes all other sessions and rotates the current on
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Single bootstrap call for the web app. Returns 401 when not signed in. Works in limited states (pending_email, MFA-pending) so the UI can route the user.
 
@@ -359,6 +372,7 @@ Single bootstrap call for the web app. Returns 401 when not signed in. Works in 
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Active (non-revoked, non-expired) sessions of the caller; `current` marks this one. IP shown as stored (truncated /24 for IPv4, /48 for IPv6 after 30 days).
 
@@ -400,6 +414,7 @@ Active (non-revoked, non-expired) sessions of the caller; `current` marks this o
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Revokes a session belonging to the caller. Revoking the current session is equivalent to logout.
 
@@ -413,6 +428,7 @@ Revokes a session belonging to the caller. Revoking the current session is equiv
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`RevokeResult`):
 ```json
@@ -427,6 +443,7 @@ Revokes a session belonging to the caller. Revoking the current session is equiv
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 5 / h per user (change-password, MFA setup/disable, payout-method create).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Generates a 160-bit secret, stores it encrypted (AES-256-GCM, key `MFA_ENCRYPTION_KEY`) as *pending* for 15 minutes. The UI renders the otpauth URI as a QR code client-side. Allowed for MFA-enrolment-required sessions.
 
@@ -457,6 +474,7 @@ Generates a 160-bit secret, stores it encrypted (AES-256-GCM, key `MFA_ENCRYPTIO
 
 - **Access:** any signed-in user · allowed for pending_email / MFA-pending sessions · CSRF
 - **Rate limit:** 5 / min per session and 20 / h per user; 10 consecutive failures revoke the MFA-pending session.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Verifies a code against the pending secret, activates MFA, generates 10 recovery codes (shown once; stored as SHA-256), marks the session MFA-verified and rotates the session id (privilege change).
 
@@ -493,6 +511,7 @@ Verifies a code against the pending secret, activates MFA, generates 10 recovery
 
 - **Access:** any signed-in user · CSRF
 - **Rate limit:** 5 / h per user (change-password, MFA setup/disable, payout-method create).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Requires password and a current TOTP code. Forbidden for users holding admin or super_admin. Deletes secret and recovery codes; security email sent.
 
@@ -533,9 +552,9 @@ Requires password and a current TOTP code. Forbidden for users holding admin or 
 }
 ```
 
-**Status codes:** 200, 401, 403, 429, 500
+**Status codes:** 200, 401, 403, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `PATCH /api/v1/me/profile` — Update my profile
 
@@ -569,11 +588,11 @@ Partial update. `legal_name`, `country`, `date_of_birth` become read-only while 
 
 **Validation:** country ISO-3166 alpha-2; phone E.164; timezone must be a valid IANA name; date_of_birth ≥ 18 years ago; all strings NFC, no control characters.
 
-**Status codes:** 200, 400, 401, 403, 412, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 412, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `verification.underage` (422)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/me/onboarding` — Accept contributor agreement and rights declaration
 
@@ -624,9 +643,9 @@ Records `agreement_acceptances` (version, timestamp, IP, user agent) and sets `o
 
 **Validation:** agreement_version must equal current published version; all booleans must be true.
 
-**Status codes:** 200, 400, 401, 403, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 413, 415, 422, 429, 500, 503
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/me/payout-methods` — List my payout methods
 
@@ -649,9 +668,9 @@ Records `agreement_acceptances` (version, timestamp, IP, user agent) and sets `o
 }
 ```
 
-**Status codes:** 200, 401, 403, 429, 500
+**Status codes:** 200, 401, 403, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/me/payout-methods` — Add a payout method
 
@@ -685,11 +704,11 @@ Requires current password (re-authentication). Max 5 methods. Emits security eve
 
 **Validation:** per-type required details (see schema); account numbers 4–34 chars [A-Za-z0-9 -]; emails RFC 5322; label 1–60 chars.
 
-**Status codes:** 201, 400, 401, 403, 409, 413, 415, 422, 429, 500
+**Status codes:** 201, 400, 401, 403, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `auth.current_password_invalid` (422), `payout_method.limit_reached` (409), `payout_method.invalid_details` (422)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `DELETE /api/v1/me/payout-methods/{method_id}` — Remove a payout method
 
@@ -700,11 +719,11 @@ Soft-deletes (kept for historical payouts which store a snapshot).
 
 **Response `204 No Content`** — no JSON body.
 
-**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `payout_method.in_use` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/me/verification` — Get my latest contributor verification
 
@@ -731,9 +750,9 @@ Returns the latest verification row or **404** `resource.not_found` if never sub
 }
 ```
 
-**Status codes:** 200, 401, 403, 429, 500
+**Status codes:** 200, 401, 403, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/me/verification` — Submit (or resubmit) contributor verification
 
@@ -773,11 +792,11 @@ multipart/form-data. Creates a new `pending` row (allowed when none, `rejected` 
 
 **Validation:** age ≥ 18; country alpha-2; phone E.164; id_document ≤ 10 MB, pdf/jpeg/png by magic bytes.
 
-**Status codes:** 201, 401, 403, 409, 413, 415, 422, 429, 500
+**Status codes:** 201, 401, 403, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `verification.already_pending` (409), `verification.already_approved` (409), `verification.underage` (422), `message.attachment_too_large` (413), `message.attachment_type_not_allowed` (415)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/me/deletion-request` — Request account deletion
 
@@ -801,11 +820,11 @@ Creates a `deletion_requests` row processed by an admin per the Retention policy
 }
 ```
 
-**Status codes:** 202, 400, 401, 403, 409, 413, 415, 422, 429, 500
+**Status codes:** 202, 400, 401, 403, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `account.deletion_blocked` (409), `account.deletion_pending` (409)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/me/notification-preferences` — Get notification preferences
 
@@ -820,9 +839,9 @@ Creates a `deletion_requests` row processed by an admin per the Retention policy
 }
 ```
 
-**Status codes:** 200, 401, 403, 429, 500
+**Status codes:** 200, 401, 403, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `PATCH /api/v1/me/notification-preferences` — Update notification preferences
 
@@ -844,9 +863,9 @@ Creates a `deletion_requests` row processed by an admin per the Retention policy
 
 **Validation:** keys must be NotificationType values; mandatory types ignore false.
 
-**Status codes:** 200, 400, 401, 403, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 413, 415, 422, 429, 500, 503
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.4 Public
 
@@ -871,9 +890,9 @@ Cached 60 s. Shows rules in force now (future rules are not published until effe
 }
 ```
 
-**Status codes:** 200, 429, 500
+**Status codes:** 200, 429, 500, 503
 
-**Common errors:** `rate_limited`, `internal_error`
+**Common errors:** `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/public/formats` — Allowed formats and upload limits
 
@@ -906,7 +925,7 @@ Machine-readable form of baseline §7 plus `extra_allowed_extensions`. Used by t
     }
   ],
   "limits": {
-    "max_file_bytes": 5000000000,
+    "max_file_bytes": 4000000000,
     "max_dataset_bytes": 50000000000,
     "user_pending_quota_bytes": 200000000000,
     "max_files_per_dataset": 2000,
@@ -915,9 +934,9 @@ Machine-readable form of baseline §7 plus `extra_allowed_extensions`. Used by t
 }
 ```
 
-**Status codes:** 200, 429, 500
+**Status codes:** 200, 429, 500, 503
 
-**Common errors:** `rate_limited`, `internal_error`
+**Common errors:** `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/public/contact` — Contact form
 
@@ -941,9 +960,46 @@ Creates a support conversation (kind `support`, no user) visible in the admin in
 {"status": "accepted", "message": "Thanks — we will reply by email."}
 ```
 
-**Status codes:** 202, 400, 403, 413, 415, 422, 429, 500
+**Status codes:** 202, 400, 403, 413, 415, 422, 429, 500, 503
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
+
+#### `POST /api/v1/public/takedown-requests` — Submit a takedown / rights or privacy complaint
+
+- **Access:** Public (no session) · CSRF required
+- **Rate limit:** 5 / h per IP.
+
+For rights holders and data subjects; **no login required** (AM-04). Creates a `takedown_requests` row (`source=public_form`, `status=received`), resolves `dataset_reference` (code or UUID) to `dataset_id` when it matches (the response never reveals whether it matched), emails an acknowledgement to the requester, and notifies `user.manage` holders. Rate-limited 5 / h per IP; honeypot `website` must be empty (bots get a silent 202). Signed-in users may use it too (`requester_user_id` is recorded).
+
+**Request** (`TakedownClaimCreate`, application/json):
+```json
+{
+  "requester_name": "Chan Vuthy",
+  "requester_email": "rights@publisher.example",
+  "requester_organization": "Angkor Press Co.",
+  "claim_type": "copyright",
+  "dataset_reference": "DS-2026-000123",
+  "file_reference": null,
+  "description": "Pages 1–48 of this dataset are scans of our 1994 newspaper editions, reproduced without permission.",
+  "evidence_url": "https://publisher.example/catalogue/1994",
+  "sworn_statement": true,
+  "website": ""
+}
+```
+
+**Response `202 Accepted`** (`Accepted`):
+```json
+{
+  "status": "accepted",
+  "message": "Your notice has been received. We will acknowledge it by email within 2 business days."
+}
+```
+
+**Validation:** requester_name 2–200 chars; requester_email valid email; claim_type ∈ TakedownClaimType; description 20–10,000 chars; sworn_statement must be true; evidence_url http(s) only.
+
+**Status codes:** 202, 400, 403, 413, 415, 422, 429, 500, 503
+
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.5 Datasets
 
@@ -974,6 +1030,7 @@ Creates `datasets` (status `draft`), `dataset_versions` v1 and `dataset_licenses
 ```json
 {
   "id": "01930b71-2222-7b00-8000-0000000000d1",
+  "code": "DS-2026-000123",
   "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "owner_display_name": "Sophea K.",
   "title": "Khmer newspaper scans 1990–1999",
@@ -1005,11 +1062,11 @@ Creates `datasets` (status `draft`), `dataset_versions` v1 and `dataset_licenses
 
 **Validation:** title 3–200 chars NFC trimmed; languages 1–5 distinct ISO codes; tags ≤ 20 × ≤ 40 chars; personal_data_notes required when contains_personal_data=true; license_version = current agreement version.
 
-**Status codes:** 201, 400, 401, 403, 413, 415, 422, 429, 500
+**Status codes:** 201, 400, 401, 403, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `auth.onboarding_required` (403)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/datasets` — List my datasets
 
@@ -1025,6 +1082,7 @@ Only datasets owned by the caller (admins use `/admin/datasets`).
   "items": [
     {
       "id": "01930b71-2222-7b00-8000-0000000000d1",
+      "code": "DS-2026-000123",
       "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
       "owner_display_name": "Sophea K.",
       "title": "Khmer newspaper scans 1990–1999",
@@ -1059,9 +1117,9 @@ Only datasets owned by the caller (admins use `/admin/datasets`).
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/datasets/{dataset_id}` — Get a dataset
 
@@ -1074,6 +1132,7 @@ Owner, or a holder of `dataset.read.any` (admin), or the reviewer whose claimed 
 ```json
 {
   "id": "01930b71-2222-7b00-8000-0000000000d1",
+  "code": "DS-2026-000123",
   "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "owner_display_name": "Sophea K.",
   "title": "Khmer newspaper scans 1990–1999",
@@ -1103,9 +1162,9 @@ Owner, or a holder of `dataset.read.any` (admin), or the reviewer whose claimed 
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `PATCH /api/v1/datasets/{dataset_id}` — Update dataset metadata
 
@@ -1127,6 +1186,7 @@ Owner only; status `draft` or `changes_requested`.
 ```json
 {
   "id": "01930b71-2222-7b00-8000-0000000000d1",
+  "code": "DS-2026-000123",
   "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "owner_display_name": "Sophea K.",
   "title": "Khmer newspaper scans 1990–1999",
@@ -1158,11 +1218,11 @@ Owner only; status `draft` or `changes_requested`.
 
 **Validation:** as DatasetCreate; all fields optional.
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 412, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 412, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `dataset.not_editable` (409)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `DELETE /api/v1/datasets/{dataset_id}` — Delete a draft or withdrawn dataset
 
@@ -1173,11 +1233,11 @@ Owner only; status `draft` or `withdrawn` and never finalized. Aborts open uploa
 
 **Response `204 No Content`** — no JSON body.
 
-**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `dataset.invalid_state` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/datasets/{dataset_id}/submit` — Submit for review
 
@@ -1190,6 +1250,7 @@ Owner only; status `draft` or `withdrawn` and never finalized. Aborts open uploa
 ```json
 {
   "id": "01930b71-2222-7b00-8000-0000000000d1",
+  "code": "DS-2026-000123",
   "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "owner_display_name": "Sophea K.",
   "title": "Khmer newspaper scans 1990–1999",
@@ -1219,11 +1280,11 @@ Owner only; status `draft` or `withdrawn` and never finalized. Aborts open uploa
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `dataset.invalid_state` (409), `dataset.files_not_terminal` (409), `dataset.no_ready_files` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/datasets/{dataset_id}/withdraw` — Withdraw a dataset
 
@@ -1236,6 +1297,7 @@ Owner only; status `draft` or `withdrawn` and never finalized. Aborts open uploa
 ```json
 {
   "id": "01930b71-2222-7b00-8000-0000000000d1",
+  "code": "DS-2026-000123",
   "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "owner_display_name": "Sophea K.",
   "title": "Khmer newspaper scans 1990–1999",
@@ -1265,11 +1327,11 @@ Owner only; status `draft` or `withdrawn` and never finalized. Aborts open uploa
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `dataset.invalid_state` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/datasets/{dataset_id}/files` — List files of a dataset
 
@@ -1297,7 +1359,6 @@ Same visibility as GET dataset. Contributors see duplicate flags without the oth
       "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d",
       "processing_status": "ready",
       "scan_status": "clean",
-      "scan_mode": "full",
       "failure_code": null,
       "failure_message": null,
       "is_container": false,
@@ -1327,9 +1388,9 @@ Same visibility as GET dataset. Contributors see duplicate flags without the oth
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `DELETE /api/v1/datasets/{dataset_id}/files/{file_id}` — Remove a file from a dataset
 
@@ -1340,11 +1401,11 @@ Owner; dataset `draft` or `changes_requested`. Removing an archive removes its m
 
 **Response `204 No Content`** — no JSON body.
 
-**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `dataset.not_editable` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/datasets/{dataset_id}/reviews` — Review feedback for my dataset
 
@@ -1380,9 +1441,9 @@ Finalized reviews only, contributor-safe projection (no reviewer identity, no in
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/datasets/{dataset_id}/estimate` — Estimated earnings for a dataset
 
@@ -1406,9 +1467,9 @@ Finalized reviews only, contributor-safe projection (no reviewer identity, no in
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.6 Files
 
@@ -1435,7 +1496,6 @@ Visible to: dataset owner; reviewer with an in-progress/finalized review of the 
   "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d",
   "processing_status": "ready",
   "scan_status": "clean",
-  "scan_mode": "full",
   "failure_code": null,
   "failure_message": null,
   "is_container": false,
@@ -1460,9 +1520,9 @@ Visible to: dataset owner; reviewer with an in-progress/finalized review of the 
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/files/{file_id}/preview/{page}` — Redirect to a page preview image
 
@@ -1473,11 +1533,11 @@ Visible to: dataset owner; reviewer with an in-progress/finalized review of the 
 
 **Response `302 Found`** — no JSON body.
 
-**Status codes:** 302, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 302, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `file.not_ready` (409), `file.no_preview` (404), `file.unavailable` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/files/{file_id}/text` — Extracted text (first 1 MB)
 
@@ -1497,11 +1557,11 @@ UTF-8 text produced by processing (docx/odt/rtf/txt/csv/json/xml/xlsx). Returned
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `file.not_ready` (409), `file.no_preview` (404), `file.unavailable` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/files/{file_id}/download-url` — Presigned download URL for the original
 
@@ -1524,11 +1584,11 @@ Presigned GET valid 5 minutes with `response-content-disposition=attachment; fil
 }
 ```
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `file.not_ready` (409), `file.unavailable` (409)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.7 Uploads
 
@@ -1571,11 +1631,11 @@ Owner; dataset `draft|changes_requested`. Checks extension allow-list (advisory)
 
 **Validation:** filename 1–255 chars after sanitisation (NFC, strip path, control chars, leading dots); stored as metadata only; size_bytes 1 … max_file_bytes; extension allowed (or in extra_allowed_extensions).
 
-**Status codes:** 201, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 201, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `dataset.not_editable` (409), `dataset.file_limit_exceeded` (409), `upload.file_too_large` (413), `upload.dataset_too_large` (413), `upload.quota_exceeded` (413), `upload.type_not_allowed` (415), `upload.storage_unavailable` (500), `auth.onboarding_required` (403)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/uploads/{upload_id}/part-urls` — Presign part upload URLs
 
@@ -1604,11 +1664,11 @@ Up to 100 presigned UploadPart PUT URLs, valid 15 minutes, signed for the **publ
 
 **Validation:** 1–100 distinct part numbers within 1…part_count.
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `upload.invalid_state` (409), `upload.expired` (409), `upload.part_number_invalid` (422), `upload.storage_unavailable` (500)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/uploads/{upload_id}` — Upload status and uploaded parts (resume)
 
@@ -1636,11 +1696,11 @@ Authoritative list of uploaded parts from S3 ListParts (paginated server-side), 
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `upload.storage_unavailable` (500)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/uploads/{upload_id}/complete` — Complete the multipart upload
 
@@ -1675,7 +1735,6 @@ Verifies the client list against ListParts (all parts 1…N present, ETags equal
   "sha256": null,
   "processing_status": "uploaded",
   "scan_status": "pending",
-  "scan_mode": "full",
   "failure_code": null,
   "failure_message": null,
   "is_container": true,
@@ -1690,11 +1749,11 @@ Verifies the client list against ListParts (all parts 1…N present, ETags equal
 }
 ```
 
-**Status codes:** 202, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 202, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `upload.invalid_state` (409), `upload.expired` (409), `upload.parts_mismatch` (422), `upload.file_too_large` (413), `upload.dataset_too_large` (413), `upload.quota_exceeded` (413), `dataset.not_editable` (409), `upload.storage_unavailable` (500)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `DELETE /api/v1/uploads/{upload_id}` — Abort an upload
 
@@ -1705,11 +1764,11 @@ AbortMultipartUpload, session `aborted`, file row deleted. Idempotent for alread
 
 **Response `204 No Content`** — no JSON body.
 
-**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 204, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `upload.invalid_state` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.8 Review
 
@@ -1727,6 +1786,7 @@ FIFO by submitted_at by default. Excludes the caller's own datasets (separation 
   "items": [
     {
       "dataset_id": "01930b71-2222-7b00-8000-0000000000d1",
+      "dataset_code": "DS-2026-000123",
       "title": "Khmer newspaper scans 1990–1999",
       "owner_display_name": "Sophea K.",
       "data_class": "raw",
@@ -1748,16 +1808,16 @@ FIFO by submitted_at by default. Excludes the caller's own datasets (separation 
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/datasets/{dataset_id}/claim-review` — Claim a submitted dataset for review
 
 - **Access:** `dataset.review` · CSRF
 - **Rate limit:** 120 / min per user.
 
-`submitted → in_review`; creates `dataset_reviews` (`in_progress`) with the caller as assignee. Uses `SELECT … FOR UPDATE SKIP LOCKED`-style guard; a concurrent claim gets 409. Owner cannot claim.
+`submitted → in_review`; creates `dataset_reviews` (`in_progress`) with the caller as assignee. Uses `SELECT … FOR UPDATE SKIP LOCKED`-style guard; a concurrent claim gets 409. Owner cannot claim. A reviewer may hold at most `review_max_active_claims` (setting, default 5) in-progress reviews (AM-09).
 
 **Response `201 Created`** (`Review`):
 ```json
@@ -1790,11 +1850,11 @@ FIFO by submitted_at by default. Excludes the caller's own datasets (separation 
 }
 ```
 
-**Status codes:** 201, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 201, 401, 403, 404, 409, 422, 429, 500, 503
 
-**Endpoint-specific errors:** `review.already_claimed` (409), `dataset.invalid_state` (409), `permission.separation_of_duties` (403)
+**Endpoint-specific errors:** `review.claim_limit_reached` (409), `review.already_claimed` (409), `dataset.invalid_state` (409), `permission.separation_of_duties` (403)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/reviews/{review_id}` — Review workspace data
 
@@ -1835,6 +1895,7 @@ Assignee reviewer, or `dataset.read.any`. Includes duplicate matches with matche
   },
   "dataset": {
     "id": "01930b71-2222-7b00-8000-0000000000d1",
+    "code": "DS-2026-000123",
     "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
     "owner_display_name": "Sophea K.",
     "title": "Khmer newspaper scans 1990–1999",
@@ -1877,7 +1938,6 @@ Assignee reviewer, or `dataset.read.any`. Includes duplicate matches with matche
       "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d",
       "processing_status": "ready",
       "scan_status": "clean",
-      "scan_mode": "full",
       "failure_code": null,
       "failure_message": null,
       "is_container": false,
@@ -1935,9 +1995,9 @@ Assignee reviewer, or `dataset.read.any`. Includes duplicate matches with matche
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `PUT /api/v1/reviews/{review_id}/files/{file_id}` — Set decision for one file
 
@@ -1971,11 +2031,11 @@ Upsert on (review_id, file_id). Assignee only; review `in_progress`.
 
 **Validation:** reason_code required when rejected; labeled_upgrade only when dataset data_class=labeled, file sha256 previously paid at raw rate, HA-08 setting on; file must be reviewable (ready, clean, not container).
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `review.not_assignee` (403), `review.invalid_state` (409), `review.reason_required` (422), `review.file_not_reviewable` (422), `review.labeled_upgrade_not_applicable` (422)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/reviews/{review_id}/files/bulk` — Set decision for many files
 
@@ -1997,11 +2057,11 @@ Same rules as single; non-reviewable files are skipped with a code instead of fa
 {"updated": 2, "skipped": []}
 ```
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `review.not_assignee` (403), `review.invalid_state` (409), `review.reason_required` (422)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `PATCH /api/v1/reviews/{review_id}` — Update checklist, scores, comments, data class
 
@@ -2051,11 +2111,11 @@ Assignee; partial merge into checklist/quality_scores; overall_quality recompute
 }
 ```
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 412, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 412, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `review.not_assignee` (403), `review.invalid_state` (409)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/reviews/{review_id}/summary` — Accepted/rejected sizes and payable amount
 
@@ -2087,9 +2147,9 @@ Computed live from file decisions with the pricing rule in force now; `allowed_d
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/reviews/{review_id}/finalize` — Finalize the review (creates earnings)
 
@@ -2146,11 +2206,11 @@ One DB transaction: lock review + dataset rows, validate consistency, set review
 
 **Validation:** all reviewable files decided (except request_changes); approve ⇒ 0 rejected; partial ⇒ ≥1 accepted and ≥1 rejected; reject ⇒ 0 accepted; feedback ≥ 10 chars unless approve.
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `review.not_assignee` (403), `review.invalid_state` (409), `review.incomplete` (422), `review.decision_inconsistent` (422), `review.feedback_required` (422)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/reviews/{review_id}/release` — Release (unclaim) a review
 
@@ -2190,11 +2250,11 @@ Assignee or admin. Review → `released`, dataset `in_review → submitted`; fil
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `review.not_assignee` (403), `review.invalid_state` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/reviews/history` — My past reviews
 
@@ -2240,9 +2300,9 @@ Assignee or admin. Review → `released`, dataset `in_review → submitted`; fil
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.9 Finance
 
@@ -2269,9 +2329,9 @@ Ledger-derived buckets (cached columns, reconciled nightly) plus the non-ledger 
 }
 ```
 
-**Status codes:** 200, 401, 403, 429, 500
+**Status codes:** 200, 401, 403, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/wallet/transactions` — My ledger lines
 
@@ -2304,9 +2364,9 @@ Ledger-derived buckets (cached columns, reconciled nightly) plus the non-ledger 
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/earnings` — My earning records
 
@@ -2343,9 +2403,9 @@ Ledger-derived buckets (cached columns, reconciled nightly) plus the non-ledger 
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/payouts` — Request a withdrawal
 
@@ -2364,6 +2424,7 @@ Transaction: lock wallet row `FOR UPDATE`, check §8.7 rules after the lock, ins
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2391,11 +2452,11 @@ Transaction: lock wallet row `FOR UPDATE`, check §8.7 rules after the lock, ins
 
 **Validation:** amount multiple of 10,000 micros (whole cents); payout_min_micros ≤ amount ≤ payout_max_micros; amount ≤ available; verification approved, account active; method owned by caller.
 
-**Status codes:** 201, 400, 401, 403, 409, 413, 415, 422, 429, 500
+**Status codes:** 201, 400, 401, 403, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `payout.insufficient_balance` (409), `payout.open_request_exists` (409), `payout.amount_below_minimum` (422), `payout.amount_above_maximum` (422), `payout.amount_not_whole_cents` (422), `payout.verification_required` (403), `payout.method_invalid` (422)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `idempotency.key_required`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `idempotency.key_required`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/payouts` — My payouts
 
@@ -2409,6 +2470,7 @@ Transaction: lock wallet row `FOR UPDATE`, check §8.7 rules after the lock, ins
   "items": [
     {
       "id": "01930b76-7777-7000-8000-000000000101",
+      "code": "PO-2026-000042",
       "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
       "user_display_name": "Sophea K.",
       "amount_micros": 10000000,
@@ -2439,9 +2501,9 @@ Transaction: lock wallet row `FOR UPDATE`, check §8.7 rules after the lock, ins
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/payouts/{payout_id}` — One of my payouts
 
@@ -2454,6 +2516,7 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2498,9 +2561,9 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/payouts/{payout_id}/cancel` — Cancel my pending withdrawal
 
@@ -2514,6 +2577,7 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2539,11 +2603,11 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
 }
 ```
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `payout.invalid_state` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.10 Admin finance
 
@@ -2551,6 +2615,7 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
 
 - **Access:** `finance.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`FinanceOverview`):
 ```json
@@ -2579,7 +2644,8 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
 
 - **Access:** `finance.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
-- **Query:** `status` — Filter (repeatable).; `user_id` — Filter.; `method` — Filter.; `min_amount_micros` — Filter.; `max_amount_micros` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `amount_micros`, `updated_at`)
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `q` — Payout code (`PO-YYYY-NNNNNN`, exact or prefix), recipient email or display name.; `status` — Filter.; `user_id` — Only payouts of this recipient (AM-05; used by the user-detail page).; `method` — Filter.; `min_amount_micros` — Filter.; `max_amount_micros` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `amount_micros`, `updated_at`)
 
 **Response `200 OK`** (`PaginatedPayout`):
 ```json
@@ -2587,6 +2653,7 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
   "items": [
     {
       "id": "01930b76-7777-7000-8000-000000000101",
+      "code": "PO-2026-000042",
       "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
       "user_display_name": "Sophea K.",
       "amount_micros": 10000000,
@@ -2625,6 +2692,7 @@ Owner only (admins use /admin/payouts/{id}). Proof file metadata visible; approv
 
 - **Access:** `finance.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Unmasked payout-method details only for `payout.approve` holders; access is audited (`payout.view_details`).
 
@@ -2632,6 +2700,7 @@ Unmasked payout-method details only for `payout.approve` holders; access is audi
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2665,6 +2734,7 @@ Unmasked payout-method details only for `payout.approve` holders; access is audi
 
 - **Access:** `payout.approve` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 Inserts `payout_approvals` (unique per approver). When approvals = approvals_required, status `requested → approved`; otherwise stays `requested`. Approver ≠ recipient; second approver ≠ first.
@@ -2678,6 +2748,7 @@ Inserts `payout_approvals` (unique per approver). When approvals = approvals_req
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2722,6 +2793,7 @@ Inserts `payout_approvals` (unique per approver). When approvals = approvals_req
 
 - **Access:** `payout.approve` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 `requested → rejected`, `payout_release` journal returns funds to available; contributor notified with the reason.
@@ -2735,6 +2807,7 @@ Inserts `payout_approvals` (unique per approver). When approvals = approvals_req
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2770,6 +2843,7 @@ Inserts `payout_approvals` (unique per approver). When approvals = approvals_req
 
 - **Access:** `payout.record_payment` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 Only after the admin has actually sent money outside DataHub. `approved → paid`; inserts `payout_records` and `payout_settle` journal (`payout:{id}:settle`). Recorder ≠ recipient. Proof may be attached before or after via `/proof`.
@@ -2783,6 +2857,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2839,6 +2914,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 
 - **Access:** `payout.record_payment` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 `approved → failed` (transfer attempt failed before settlement); `payout_release` journal.
@@ -2852,6 +2928,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2887,6 +2964,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 
 - **Access:** `payout.approve` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 `approved → cancelled`; `payout_release` journal.
@@ -2900,6 +2978,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -2935,6 +3014,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 
 - **Access:** `finance.adjust` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 `paid → reversed`; `payout_reversal` journal moves amount from `paid` back to `available`. super_admin only; actor ≠ recipient.
@@ -2948,6 +3028,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 ```json
 {
   "id": "01930b76-7777-7000-8000-000000000101",
+  "code": "PO-2026-000042",
   "user_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "user_display_name": "Sophea K.",
   "amount_micros": 10000000,
@@ -3002,6 +3083,7 @@ Only after the admin has actually sent money outside DataHub. `approved → paid
 
 - **Access:** `payout.record_payment` · admin MFA session · CSRF
 - **Rate limit:** 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 multipart/form-data, PDF/PNG/JPEG ≤ 10 MB (magic bytes), ClamAV scanned, stored at `payouts/{payout_id}/proof/{attachment_id}`. Allowed while status `approved` (staged, attached on mark-paid) or `paid`. Replacing keeps the previous object (audited).
 
@@ -3040,6 +3122,7 @@ multipart/form-data, PDF/PNG/JPEG ≤ 10 MB (magic bytes), ClamAV scanned, store
 
 - **Access:** `finance.adjust` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 Writes `payout_adjustments` + `adjustment_credit|adjustment_debit` journal (`adjustment:{id}`). Debits cannot drive available below 0. Actor ≠ target user. Never edits existing ledger lines.
@@ -3080,6 +3163,7 @@ Writes `payout_adjustments` + `adjustment_credit|adjustment_debit` journal (`adj
 
 - **Access:** `finance.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Query:** `user_id` — Filter.; `wallet_id` — Filter.; `journal_id` — Filter.; `kind` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`)
 
 **Response `200 OK`** (`PaginatedLedgerLine`):
@@ -3115,6 +3199,7 @@ Writes `payout_adjustments` + `adjustment_credit|adjustment_debit` journal (`adj
 
 - **Access:** `finance.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 All rules, past, current and scheduled. Path is outside /admin per baseline §12 but requires admin MFA like other admin reads.
 
@@ -3154,6 +3239,7 @@ All rules, past, current and scheduled. Path is outside /admin per baseline §12
 
 - **Access:** `pricing.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `Idempotency-Key` (optional)
 
 Closes the previous open rule at effective_from (sets effective_to) and inserts the new one; rules are never edited. Reviews finalized after effective_from use the new rate.
@@ -3192,6 +3278,7 @@ Closes the previous open rule at effective_from (sets effective_to) and inserts 
 
 - **Access:** `finance.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`Reconciliation`):
 ```json
@@ -3214,6 +3301,7 @@ Closes the previous open rule at effective_from (sets effective_to) and inserts 
 
 - **Access:** `annotation.manage` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Query:** `status` — Filter.; `q` — Case-insensitive search text.; `page`, `page_size`, `sort` (sortable: `created_at`, `name`, `deadline`)
 
 **Response `200 OK`** (`PaginatedAnnotationProject`):
@@ -3265,6 +3353,7 @@ Closes the previous open rule at effective_from (sets effective_to) and inserts 
 
 - **Access:** `annotation.manage` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Request** (`AnnotationProjectCreate`, application/json):
 ```json
@@ -3328,6 +3417,7 @@ Closes the previous open rule at effective_from (sets effective_to) and inserts 
 
 - **Access:** `annotation.manage` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`AnnotationProject`):
 ```json
@@ -3371,6 +3461,7 @@ Closes the previous open rule at effective_from (sets effective_to) and inserts 
 
 - **Access:** `annotation.manage` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `If-Match` (optional)
 
 **Request** (`AnnotationProjectUpdate`, application/json):
@@ -3422,6 +3513,7 @@ Closes the previous open rule at effective_from (sets effective_to) and inserts 
 
 - **Access:** `annotation.manage` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 One task per accepted, annotatable file (task_unit=file) or per page (task_unit=page, pages from page_count). Unique (project_id, file_id, page_number) makes it idempotent. Ineligible: rejected, non-annotatable formats (§7), failed/quarantined.
 
@@ -3445,6 +3537,7 @@ One task per accepted, annotatable file (task_unit=file) or per page (task_unit=
 
 - **Access:** `annotation.manage` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 All non-approved tasks → `cancelled`; annotators notified; approved rewards unaffected.
 
@@ -3492,6 +3585,7 @@ All non-approved tasks → `cancelled`; annotators notified; approved rewards un
 
 - **Access:** `annotation.manage` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Query:** `status` — Filter (repeatable).; `assignee_id` — Filter.; `dataset_id` — Filter.; `overdue` — due_at < now and not approved.; `page`, `page_size`, `sort` (sortable: `created_at`, `due_at`, `status`)
 
 **Response `200 OK`** (`PaginatedAnnotationTask`):
@@ -3534,6 +3628,7 @@ All non-approved tasks → `cancelled`; annotators notified; approved rewards un
 
 - **Access:** `annotation.manage` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Task `unassigned → assigned` (or reassigns an `assigned|in_progress` task: old assignment ended, draft kept). Annotator must hold `annotator`, be active and verification `approved` (A-08). Notifies annotator.
 
@@ -3577,6 +3672,7 @@ Task `unassigned → assigned` (or reassigns an `assigned|in_progress` task: old
 
 - **Access:** `annotation.manage` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 ≤ 500 per call; each item validated independently; failures reported per task.
 
@@ -3603,6 +3699,7 @@ Task `unassigned → assigned` (or reassigns an `assigned|in_progress` task: old
 
 - **Access:** `annotation.manage` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 `assigned|in_progress → unassigned`; draft preserved for the next assignee.
 
@@ -3675,9 +3772,9 @@ Task `unassigned → assigned` (or reassigns an `assigned|in_progress` task: old
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/annotation/tasks/{task_id}` — Task workspace data
 
@@ -3732,7 +3829,6 @@ Active assignee; reviewer who claimed the task (or browsing `annotation.review` 
     "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d",
     "processing_status": "ready",
     "scan_status": "clean",
-    "scan_mode": "full",
     "failure_code": null,
     "failure_message": null,
     "is_container": false,
@@ -3781,9 +3877,9 @@ Active assignee; reviewer who claimed the task (or browsing `annotation.review` 
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/annotation/tasks/{task_id}/start` — Start working on a task
 
@@ -3838,7 +3934,6 @@ Active assignee; reviewer who claimed the task (or browsing `annotation.review` 
     "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d",
     "processing_status": "ready",
     "scan_status": "clean",
-    "scan_mode": "full",
     "failure_code": null,
     "failure_message": null,
     "is_container": false,
@@ -3887,11 +3982,11 @@ Active assignee; reviewer who claimed the task (or browsing `annotation.review` 
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `annotation.not_assignee` (403), `annotation.invalid_state` (409), `annotation.project_closed` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `PUT /api/v1/annotation/tasks/{task_id}/draft` — Autosave draft (optimistic locking)
 
@@ -3933,11 +4028,11 @@ Active assignee; reviewer who claimed the task (or browsing `annotation.review` 
 
 **Validation:** structure per AnnotationData; pages within file page range; one entry per page; classification labels ∈ label_set; metadata keys ∈ metadata_schema with matching types (required-ness checked at submit); regions must be empty (bbox reserved); body ≤ 2 MiB.
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `annotation.version_conflict` (409), `annotation.not_assignee` (403), `annotation.invalid_state` (409), `annotation.validation_failed` (422), `precondition.required` (400)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/annotation/tasks/{task_id}/submit` — Submit annotation for review
 
@@ -3977,11 +4072,11 @@ Active assignee; reviewer who claimed the task (or browsing `annotation.review` 
 }
 ```
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 412, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 412, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `annotation.version_conflict` (409), `annotation.not_assignee` (403), `annotation.invalid_state` (409), `annotation.validation_failed` (422)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `precondition.failed`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/annotation/tasks/{task_id}/versions` — Annotation version history
 
@@ -4025,9 +4120,9 @@ Same visibility as GET task. Used for diff/compare in reviewer and draft recover
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/annotation/my-rewards` — My annotation rewards
 
@@ -4059,9 +4154,9 @@ Same visibility as GET task. Used for diff/compare in reviewer and draft recover
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/annotation/review-queue` — Submitted annotations awaiting review
 
@@ -4103,9 +4198,9 @@ Excludes tasks the caller annotated (separation of duties).
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/annotation/tasks/{task_id}/claim-review` — Claim a submitted annotation for review
 
@@ -4131,11 +4226,11 @@ Excludes tasks the caller annotated (separation of duties).
 }
 ```
 
-**Status codes:** 201, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 201, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `annotation.already_claimed` (409), `annotation.invalid_state` (409), `permission.separation_of_duties` (403)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/annotation/tasks/{task_id}/review` — Approve or request changes
 
@@ -4202,11 +4297,11 @@ Claimant only. approve: `in_review → approved`, inserts `annotation_rewards` (
 }
 ```
 
-**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `annotation.invalid_state` (409), `annotation.comments_required` (422), `permission.separation_of_duties` (403), `permission.denied` (403)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `csrf.missing`, `csrf.invalid`, `idempotency.key_invalid`, `idempotency.key_reused`, `idempotency.in_progress`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/annotation/reviews/history` — My annotation reviews
 
@@ -4238,9 +4333,9 @@ Claimant only. approve: `in_review → approved`, inserts `annotation_rewards` (
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.12 Messaging
 
@@ -4285,9 +4380,9 @@ Claimant only. approve: `in_review → approved`, inserts `annotation_rewards` (
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/conversations` — Start a conversation
 
@@ -4346,9 +4441,9 @@ Contributors open `support` (or `dataset` when dataset_id given — must own it)
 
 **Validation:** subject 3–150; body 1–10,000 chars, stored as plain text (rendered escaped with autolinks); ≤ 5 attachments, owned by caller, unused, scan clean or pending.
 
-**Status codes:** 201, 400, 401, 403, 413, 415, 422, 429, 500
+**Status codes:** 201, 400, 401, 403, 413, 415, 422, 429, 500, 503
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/conversations/{conversation_id}` — Conversation detail
 
@@ -4383,9 +4478,9 @@ Participants and `message.support` holders only.
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `PATCH /api/v1/conversations/{conversation_id}` — Change status / assignment
 
@@ -4425,9 +4520,9 @@ Participants may close; only staff may set `awaiting_user` or `assigned_admin_id
 }
 ```
 
-**Status codes:** 200, 400, 401, 403, 404, 413, 415, 422, 429, 500
+**Status codes:** 200, 400, 401, 403, 404, 413, 415, 422, 429, 500, 503
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/conversations/{conversation_id}/messages` — Messages (oldest→newest)
 
@@ -4458,9 +4553,9 @@ Default sort `created_at`; page_size up to 100. Attachments with scan_status ≠
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/conversations/{conversation_id}/messages` — Send a message
 
@@ -4499,11 +4594,11 @@ Contributor message on `closed`/`awaiting_user` conversation reopens it to `open
 }
 ```
 
-**Status codes:** 201, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+**Status codes:** 201, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `message.conversation_closed` (409), `message.attachment_unavailable` (409)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/conversations/{conversation_id}/read` — Mark read up to a message
 
@@ -4517,9 +4612,9 @@ Contributor message on `closed`/`awaiting_user` conversation reopens it to `open
 
 **Response `204 No Content`** — no JSON body.
 
-**Status codes:** 204, 400, 401, 403, 404, 413, 415, 422, 429, 500
+**Status codes:** 204, 400, 401, 403, 404, 413, 415, 422, 429, 500, 503
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/conversations/{conversation_id}/attachments` — Upload an attachment
 
@@ -4547,11 +4642,11 @@ multipart ≤ 10 MB; allowed by magic bytes: pdf, png, jpeg, txt, csv, docx, xls
 }
 ```
 
-**Status codes:** 201, 401, 403, 404, 413, 415, 422, 429, 500
+**Status codes:** 201, 401, 403, 404, 413, 415, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `message.attachment_too_large` (413), `message.attachment_type_not_allowed` (415)
 
-**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/attachments/{attachment_id}/download-url` — Presigned attachment download
 
@@ -4569,11 +4664,11 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 }
 ```
 
-**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500
+**Status codes:** 200, 401, 403, 404, 409, 422, 429, 500, 503
 
 **Endpoint-specific errors:** `message.attachment_unavailable` (409)
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/ws` — WebSocket upgrade (realtime events)
 
@@ -4584,9 +4679,9 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 
 **Response `101 Switching Protocols`** — no JSON body.
 
-**Status codes:** 101, 401, 429, 500
+**Status codes:** 101, 401, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.13 Notifications
 
@@ -4617,9 +4712,9 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 }
 ```
 
-**Status codes:** 200, 401, 403, 422, 429, 500
+**Status codes:** 200, 401, 403, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `GET /api/v1/notifications/unread-count` — Unread count
 
@@ -4631,9 +4726,9 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 {"unread": 3}
 ```
 
-**Status codes:** 200, 401, 403, 429, 500
+**Status codes:** 200, 401, 403, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/notifications/{notification_id}/read` — Mark one read
 
@@ -4642,9 +4737,9 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 
 **Response `204 No Content`** — no JSON body.
 
-**Status codes:** 204, 401, 403, 404, 422, 429, 500
+**Status codes:** 204, 401, 403, 404, 422, 429, 500, 503
 
-**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 #### `POST /api/v1/notifications/read-all` — Mark all read
 
@@ -4656,9 +4751,9 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 {"count": 3}
 ```
 
-**Status codes:** 200, 401, 403, 429, 500
+**Status codes:** 200, 401, 403, 429, 500, 503
 
-**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+**Common errors:** `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`, `service_unavailable`
 
 ### 10.14 Admin users
 
@@ -4666,7 +4761,8 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 
 - **Access:** `user.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
-- **Query:** `q` — Case-insensitive search text.; `role` — Filter.; `status` — Filter.; `verification_status` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `email`, `last_login_at`)
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `q` — Case-insensitive search text.; `role` — Users holding this role (AM-05).; `status` — Filter.; `verification_status` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `email`, `last_login_at`)
 
 **Response `200 OK`** (`PaginatedUser`):
 ```json
@@ -4700,6 +4796,7 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 
 - **Access:** `user.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`AdminUserDetail`):
 ```json
@@ -4770,6 +4867,7 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 
 - **Access:** `user.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 `active → suspended`; revokes all sessions immediately (and closes their WebSockets), cancels open upload sessions, releases claimed reviews/unassigns in-progress tasks, blocks payout approval (open payouts stay for admin decision). Admin cannot suspend admins/super_admins unless super_admin; nobody suspends themselves.
 
@@ -4805,6 +4903,7 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 
 - **Access:** `user.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 `suspended → active`. User must sign in again.
 
@@ -4835,6 +4934,7 @@ Participants/staff of the attachment's conversation (uploader always). 5 min, `C
 
 - **Access:** `user.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Full replacement. Granting/removing `admin` or `super_admin` requires `role.manage` (super_admin). No self-changes. Last active super_admin cannot be removed. The target's sessions are rotated (privilege change); a granted admin role forces MFA enrolment on next request.
 
@@ -4870,6 +4970,7 @@ Full replacement. Granting/removing `admin` or `super_admin` requires `role.mana
 
 - **Access:** `user.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`RevokeResult`):
 ```json
@@ -4886,6 +4987,7 @@ Full replacement. Granting/removing `admin` or `super_admin` requires `role.mana
 
 - **Access:** `user.verify` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Query:** `status` — Default pending.; `q` — Case-insensitive search text.; `page`, `page_size`, `sort` (sortable: `submitted_at`)
 
 **Response `200 OK`** (`PaginatedContributorVerification`):
@@ -4921,6 +5023,7 @@ Full replacement. Granting/removing `admin` or `super_admin` requires `role.mana
 
 - **Access:** `user.verify` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 `pending → approved|rejected|needs_info`; mirrors users.verification_status; notifies user. Verifier ≠ subject. ID document access audited.
 
@@ -4961,7 +5064,8 @@ Full replacement. Granting/removing `admin` or `super_admin` requires `role.mana
 
 - **Access:** `dataset.read.any` · admin MFA session
 - **Rate limit:** 600 / min per user.
-- **Query:** `q` — Case-insensitive search text.; `status` — Filter (repeatable).; `data_class` — Filter.; `language` — Filter.; `category` — Filter.; `min_quality` — Overall quality ≥.; `owner_id` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `updated_at`, `title`, `total_bytes`, `submitted_at`, `finalized_at`, `overall_quality`)
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `q` — Dataset code (`DS-YYYY-NNNNNN`, exact), title (trigram) or owner email.; `status` — Filter (repeatable).; `data_class` — Filter.; `language` — Filter.; `category` — Filter.; `min_quality` — Overall quality ≥.; `owner_id` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `updated_at`, `title`, `total_bytes`, `submitted_at`, `finalized_at`, `overall_quality`)
 
 **Response `200 OK`** (`PaginatedDataset`):
 ```json
@@ -4969,6 +5073,7 @@ Full replacement. Granting/removing `admin` or `super_admin` requires `role.mana
   "items": [
     {
       "id": "01930b71-2222-7b00-8000-0000000000d1",
+      "code": "DS-2026-000123",
       "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
       "owner_display_name": "Sophea K.",
       "title": "Khmer newspaper scans 1990–1999",
@@ -5011,6 +5116,7 @@ Full replacement. Granting/removing `admin` or `super_admin` requires `role.mana
 
 - **Access:** `dataset.read.any` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Full dataset record with all reviews (including internal comments and reviewer identities), version history, licence acceptance evidence and earning total. Files are fetched via `GET /datasets/{id}/files` (admins have `dataset.read.any`).
 
@@ -5019,6 +5125,7 @@ Full dataset record with all reviews (including internal comments and reviewer i
 {
   "dataset": {
     "id": "01930b71-2222-7b00-8000-0000000000d1",
+    "code": "DS-2026-000123",
     "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
     "owner_display_name": "Sophea K.",
     "title": "Khmer newspaper scans 1990–1999",
@@ -5090,6 +5197,7 @@ Full dataset record with all reviews (including internal comments and reviewer i
 
 - **Access:** `dataset.read.any` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Any status → `taken_down`; files become undownloadable/unpreviewable (except audit), excluded from exports and annotation (open tasks cancelled). Earnings already credited are **not** reversed automatically; a super_admin may post an `adjustment_debit` (`takedown_clawback`).
 
@@ -5106,6 +5214,7 @@ Any status → `taken_down`; files become undownloadable/unpreviewable (except a
 ```json
 {
   "id": "01930b71-2222-7b00-8000-0000000000d1",
+  "code": "DS-2026-000123",
   "owner_id": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01",
   "owner_display_name": "Sophea K.",
   "title": "Khmer newspaper scans 1990–1999",
@@ -5145,6 +5254,7 @@ Any status → `taken_down`; files become undownloadable/unpreviewable (except a
 
 - **Access:** `dataset.read.any` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Re-enqueues `processing.process_file` with `force_rescan`; used after signature updates or `scan_status=error`. Not allowed for finalized-accepted files with clean status (no-op 202).
 
@@ -5164,7 +5274,6 @@ Re-enqueues `processing.process_file` with `force_rescan`; used after signature 
   "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d",
   "processing_status": "processing",
   "scan_status": "pending",
-  "scan_mode": "full",
   "failure_code": null,
   "failure_message": null,
   "is_container": false,
@@ -5193,14 +5302,112 @@ Re-enqueues `processing.process_file` with `force_rescan`; used after signature 
 
 **Common errors:** `validation_error`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
 
+#### `GET /api/v1/admin/takedown-requests` — Takedown request queue
+
+- **Access:** `user.manage` · admin MFA session
+- **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `q` — Case-insensitive search text.; `status` — Default `received,under_review`.; `claim_type` — Filter.; `source` — Filter.; `dataset_id` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`, `updated_at`, `status`)
+
+Rights/privacy complaints from `POST /public/takedown-requests`, signed-in users and admins (AM-04). `q` matches requester name/email/organisation and dataset code. Viewing requester contact data is audited.
+
+**Response `200 OK`** (`PaginatedTakedownCase`):
+```json
+{
+  "items": [
+    {
+      "id": "01930b7f-0000-7900-8000-000000000a01",
+      "source": "public_form",
+      "status": "received",
+      "claim_type": "copyright",
+      "dataset_id": "01930b71-2222-7b00-8000-0000000000d1",
+      "dataset_code": "DS-2026-000123",
+      "dataset_status": "approved",
+      "file_id": null,
+      "requester_user_id": null,
+      "requester_name": "Chan Vuthy",
+      "requester_email": "rights@publisher.example",
+      "requester_organization": "Angkor Press Co.",
+      "description": "Pages 1–48 of this dataset are scans of our 1994 newspaper editions, reproduced without permission.",
+      "evidence_url": "https://publisher.example/catalogue/1994",
+      "decided_by": null,
+      "decided_at": null,
+      "decision_notes": null,
+      "created_at": "2026-10-26T08:30:00Z",
+      "updated_at": "2026-10-26T08:30:00Z"
+    }
+  ],
+  "page": 1,
+  "page_size": 25,
+  "total": 1
+}
+```
+
+**Status codes:** 200, 401, 403, 422, 429, 500
+
+**Common errors:** `validation_error`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `rate_limited`, `internal_error`
+
+#### `POST /api/v1/admin/takedown-requests/{takedown_id}/decision` — Decide a takedown request
+
+- **Access:** `user.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
+- **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+
+Transitions (AM-04, LLD §12): `received → under_review`; `received|under_review → actioned|rejected`. `actioned` requires the linked dataset to be `taken_down` — either already, or in the same transaction via `apply_takedown=true` (same effects as `POST /admin/datasets/{id}/takedown`: review released, open annotation tasks cancelled, owner notified). `dataset_id` may (re)link the request to a dataset. The requester is emailed the outcome for `actioned`/`rejected`. Audited with before/after.
+
+**Request** (`TakedownDecision`, application/json):
+```json
+{
+  "decision": "actioned",
+  "notes": "Publisher ownership verified; dataset removed.",
+  "dataset_id": null,
+  "apply_takedown": true,
+  "takedown_reason_code": "rights_claim"
+}
+```
+
+**Response `200 OK`** (`TakedownCase`):
+```json
+{
+  "id": "01930b7f-0000-7900-8000-000000000a01",
+  "source": "public_form",
+  "status": "actioned",
+  "claim_type": "copyright",
+  "dataset_id": "01930b71-2222-7b00-8000-0000000000d1",
+  "dataset_code": "DS-2026-000123",
+  "dataset_status": "taken_down",
+  "file_id": null,
+  "requester_user_id": null,
+  "requester_name": "Chan Vuthy",
+  "requester_email": "rights@publisher.example",
+  "requester_organization": "Angkor Press Co.",
+  "description": "Pages 1–48 of this dataset are scans of our 1994 newspaper editions, reproduced without permission.",
+  "evidence_url": "https://publisher.example/catalogue/1994",
+  "decided_by": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02",
+  "decided_at": "2026-10-26T09:15:00Z",
+  "decision_notes": "Publisher ownership verified; dataset removed.",
+  "created_at": "2026-10-26T08:30:00Z",
+  "updated_at": "2026-10-26T09:15:00Z"
+}
+```
+
+**Validation:** notes 5–5,000 chars; takedown_reason_code required when apply_takedown=true.
+
+**Status codes:** 200, 400, 401, 403, 404, 409, 413, 415, 422, 429, 500
+
+**Endpoint-specific errors:** `takedown.invalid_state` (409), `takedown.dataset_not_taken_down` (409), `takedown.no_target` (422), `dataset.invalid_state` (409)
+
+**Common errors:** `request.unsupported_media_type`, `request.payload_too_large`, `validation_error`, `request.malformed`, `resource.not_found`, `auth.not_authenticated`, `auth.session_expired`, `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`, `auth.step_up_required`, `csrf.missing`, `csrf.invalid`, `rate_limited`, `internal_error`
+
 ### 10.16 Exports
 
 #### `POST /api/v1/admin/exports` — Create an export job
 
 - **Access:** `dataset.export` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 10 / h per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
-Only approved/partially_approved datasets and accepted files are exportable; taken_down excluded. Background `exports.build_export` streams objects into ZIP parts ≤ 5 GB at `exports/{job_id}/{file}.zip`. Logged with dataset ids (audit). Expires after 7 days (A-15).
+Only approved/partially_approved datasets and accepted files are exportable; taken_down excluded. Background `exports.build_export` streams objects into ZIP parts ≤ 4 GB (4,000,000,000 bytes) at `exports/{job_id}/datahub-export-{job_id}-partNNN.zip`. The job gets a human code `EX-YYYY-NNNNNN` (AM-07). Logged with dataset ids (audit). Expires after 7 days (A-15).
 
 **Request** (`ExportCreate`, application/json):
 ```json
@@ -5225,6 +5432,7 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
 ```json
 {
   "id": "01930b7a-bbbb-7400-8000-000000000501",
+  "code": "EX-2026-000007",
   "status": "queued",
   "requested_by": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02",
   "filters": {
@@ -5262,7 +5470,8 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
 
 - **Access:** `dataset.export` · admin MFA session
 - **Rate limit:** 600 / min per user.
-- **Query:** `status` — Filter.; `requested_by` — Filter.; `page`, `page_size`, `sort` (sortable: `created_at`)
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `q` — Export code (`EX-YYYY-NNNNNN`) or note text.; `status` — Filter.; `requested_by` — Filter.; `page`, `page_size`, `sort` (sortable: `created_at`)
 
 **Response `200 OK`** (`PaginatedExportJob`):
 ```json
@@ -5270,6 +5479,7 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
   "items": [
     {
       "id": "01930b7a-bbbb-7400-8000-000000000501",
+      "code": "EX-2026-000007",
       "status": "completed",
       "requested_by": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02",
       "filters": {
@@ -5292,7 +5502,7 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
         {
           "id": "01930b7a-bbbb-7400-8000-000000000502",
           "name": "datahub-export-01930b7a-part-001.zip",
-          "size_bytes": 4831838208,
+          "size_bytes": 3998712041,
           "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d"
         }
       ],
@@ -5317,11 +5527,13 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
 
 - **Access:** `dataset.export` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`ExportJob`):
 ```json
 {
   "id": "01930b7a-bbbb-7400-8000-000000000501",
+  "code": "EX-2026-000007",
   "status": "completed",
   "requested_by": "01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02",
   "filters": {
@@ -5344,7 +5556,7 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
     {
       "id": "01930b7a-bbbb-7400-8000-000000000502",
       "name": "datahub-export-01930b7a-part-001.zip",
-      "size_bytes": 4831838208,
+      "size_bytes": 3998712041,
       "sha256": "9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d"
     }
   ],
@@ -5364,6 +5576,7 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
 
 - **Access:** `dataset.export` · admin MFA session · CSRF
 - **Rate limit:** 120 / min per user (presigned URL issuance, preview redirects).
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 5-minute presigned GET; every issuance audited (`export.download_url`).
 
@@ -5393,6 +5606,7 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
 
 - **Access:** `analytics.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Query:** `from` — Start date (UTC, inclusive); default 30 days ago.; `to` — End date (UTC, inclusive); default today; range ≤ 366 days.
 
 **Response `200 OK`** (`AnalyticsOverview`):
@@ -5426,7 +5640,8 @@ Only approved/partially_approved datasets and accepted files are exportable; tak
 
 - **Access:** `audit.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
-- **Query:** `actor_id` — Filter.; `action` — Exact or prefix (`payout.`).; `entity_type` — Filter.; `entity_id` — Filter.; `request_id` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`)
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
+- **Query:** `actor_id` — Only rows written by this actor (AM-05).; `action` — Exact or prefix (`payout.`).; `entity_type` — Entity table/type, e.g. `dataset`, `payout_request`, `user` (AM-05).; `entity_id` — Entity id (UUID); combine with entity_type for an entity's history (AM-05).; `request_id` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`)
 
 Read-only; audit rows are append-only (UPDATE/DELETE blocked by trigger). Viewing is itself audited.
 
@@ -5463,6 +5678,7 @@ Read-only; audit rows are append-only (UPDATE/DELETE blocked by trigger). Viewin
 
 - **Access:** `audit.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Query:** `user_id` — Filter.; `event_type` — Filter.; `ip` — Filter.; `from` — Inclusive lower bound (created_at).; `to` — Exclusive upper bound (created_at).; `page`, `page_size`, `sort` (sortable: `created_at`)
 
 **Response `200 OK`** (`PaginatedSecurityEvent`):
@@ -5494,6 +5710,7 @@ Read-only; audit rows are append-only (UPDATE/DELETE blocked by trigger). Viewin
 
 - **Access:** `settings.manage` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 **Response `200 OK`** (`SystemSettingList`):
 ```json
@@ -5520,6 +5737,7 @@ Read-only; audit rows are append-only (UPDATE/DELETE blocked by trigger). Viewin
 
 - **Access:** `settings.manage` · admin MFA session · **step-up MFA ≤ 15 min** · CSRF
 - **Rate limit:** 120 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 - **Headers:** `If-Match` (optional)
 
 Registry-validated keys only (see AUTH/API docs). Change is audited with before/after and takes effect within 30 s (settings cache TTL).
@@ -5552,6 +5770,7 @@ Registry-validated keys only (see AUTH/API docs). Change is audited with before/
 
 - **Access:** `user.read` · admin MFA session
 - **Rate limit:** 600 / min per user.
+- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).
 
 Read-only in v1: role → permission mapping is seeded by migration (baseline §6); changing it requires a migration + DECISION_LOG entry.
 

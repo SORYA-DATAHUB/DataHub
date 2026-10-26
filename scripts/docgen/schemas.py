@@ -57,6 +57,10 @@ BYTES = {"type": "integer", "format": "int64", "minimum": 0, "description": "Siz
 SHA256 = s(pattern="^[0-9a-f]{64}$", desc="Lower-case hex SHA-256.")
 ANY = {}
 
+def CODE(prefix):
+    """Human reference code (baseline AM-07): PREFIX-YYYY-NNNNNN, sequence per prefix per year; display only, URLs use the UUID."""
+    return s(pattern=f"^{prefix}-[0-9]{{4}}-[0-9]{{6}}$", desc=f"Human reference `{prefix}-YYYY-NNNNNN` (AM-07). Unique, immutable; display/search only — URLs and foreign keys use `id`.")
+
 # ---------------- enums (baseline §9 exact) ----------------
 ENUMS = {
     "RoleName": en("contributor", "annotator", "reviewer", "admin", "super_admin"),
@@ -92,6 +96,9 @@ ENUMS = {
                          desc="`bbox` is reserved for v2 and rejected in v1."),
     "TaskUnit": en("file", "page"),
     "AnnotationReviewDecision": en("approve", "request_changes"),
+    "TakedownClaimType": en("copyright", "privacy", "illegal_content", "consent_withdrawn", "other"),
+    "TakedownStatus": en("received", "under_review", "actioned", "rejected", "withdrawn"),
+    "TakedownSource": en("public_form", "user", "admin"),
     "PayoutStatus": en("requested", "approved", "paid", "rejected", "cancelled", "failed", "reversed"),
     "PayoutMethodType": en("bank_transfer", "aba_pay", "wise", "paypal", "other"),
     "ExportStatus": en("queued", "running", "completed", "failed", "expired"),
@@ -263,11 +270,11 @@ def build():
                              ["title", "data_class", "category", "languages", "contains_personal_data", "rights_declaration_accepted", "license_version"], closed=True)
     S["DatasetUpdate"] = obj(dict(DS_PROPS), closed=True, desc="Allowed while status ∈ {draft, changes_requested}.")
     S["Dataset"] = obj(dict(DS_PROPS,
-        id=UUID, owner_id=UUID, owner_display_name=s(), status=E("DatasetStatus"), version_number=INT,
+        id=UUID, code=CODE("DS"), owner_id=UUID, owner_display_name=s(), status=E("DatasetStatus"), version_number=INT,
         file_count=INT, ready_file_count=INT, failed_file_count=INT, total_bytes=BYTES, accepted_bytes=nul(BYTES),
         earned_micros=nul(micros()), license_version=s(), takedown_reason=nul(s()),
         submitted_at=nul(DT), finalized_at=nul(DT), created_at=DT, updated_at=DT, version=INT),
-        ["id", "owner_id", "title", "data_class", "category", "languages", "status", "version_number", "file_count", "total_bytes", "created_at", "updated_at", "version"])
+        ["id", "code", "owner_id", "title", "data_class", "category", "languages", "status", "version_number", "file_count", "total_bytes", "created_at", "updated_at", "version"])
     S["DatasetEstimate"] = obj({
         "dataset_id": UUID, "is_estimate": {"type": "boolean", "const": True}, "data_class": E("DataClass"),
         "rate_micros_per_gb": micros(), "eligible_bytes": BYTES, "excluded_bytes": BYTES,
@@ -283,7 +290,7 @@ def build():
         "id": UUID, "dataset_id": UUID, "parent_file_id": nul(UUID), "original_filename": s(maxl=255),
         "relative_path": nul(s(maxl=1024)), "member_path": nul(s(maxl=1024)), "extension": s(), "declared_mime": nul(s()),
         "detected_mime": nul(s()), "size_bytes": BYTES, "sha256": nul(SHA256), "processing_status": E("FileProcessingStatus"),
-        "scan_status": E("ScanStatus"), "scan_mode": nul(en("full", "windowed", desc="windowed = file > 2,000,000,000 bytes scanned in overlapping windows (ClamAV single-file limit); flagged to reviewers.")),
+        "scan_status": E("ScanStatus"),
         "failure_code": nul(E("FileFailureCode")), "failure_message": nul(s()),
         "is_container": BOOL, "page_count": nul(INT), "previews": arr(E("FilePreview")), "text_available": BOOL,
         "duplicates": arr(E("DuplicateMatch")), "review_decision": nul(E("FileReviewDecision")),
@@ -350,7 +357,7 @@ def build():
     S["FinalizeResult"] = obj({"review": E("Review"), "dataset_status": E("DatasetStatus"), "earning": nul(obj({
         "journal_id": UUID, "amount_micros": micros(), "records": INT, "credited_bucket": en("available", "pending")}, ["journal_id", "amount_micros", "records", "credited_bucket"]))},
         ["review", "dataset_status", "earning"])
-    S["ReviewQueueItem"] = obj({"dataset_id": UUID, "title": s(), "owner_display_name": s(), "data_class": E("DataClass"),
+    S["ReviewQueueItem"] = obj({"dataset_id": UUID, "dataset_code": CODE("DS"), "title": s(), "owner_display_name": s(), "data_class": E("DataClass"),
                                 "category": E("DatasetCategory"), "languages": arr(E("Language")), "file_count": INT, "total_bytes": BYTES,
                                 "submitted_at": DT, "version_number": INT, "has_duplicate_flags": BOOL, "contains_personal_data": BOOL,
                                 "status": E("DatasetStatus"), "claimed_review_id": nul(UUID)},
@@ -387,12 +394,12 @@ def build():
                              "recorded_by": UUID, "notes": nul(s()), "proof": nul(obj({"filename": s(), "size_bytes": BYTES, "content_type": s(), "uploaded_at": DT, "url": nul(s(fmt="uri", desc="Presigned GET (5 min, attachment) for the recipient and finance.read holders.")), "url_expires_at": nul(DT)})),
                              "created_at": DT}, ["id", "payout_id", "payment_reference", "method", "paid_at", "recorded_by", "created_at"])
     S["Payout"] = obj({
-        "id": UUID, "user_id": UUID, "user_display_name": s(), "amount_micros": micros(), "currency": en("USD"), "status": E("PayoutStatus"),
+        "id": UUID, "code": CODE("PO"), "user_id": UUID, "user_display_name": s(), "amount_micros": micros(), "currency": en("USD"), "status": E("PayoutStatus"),
         "payout_method": obj({"id": UUID, "type": E("PayoutMethodType"), "label": s(), "details": {"type": "object"}}, ["id", "type", "label"]),
         "note": nul(s(maxl=500)), "approvals_required": {"type": "integer", "minimum": 1, "maximum": 2}, "approvals": arr(E("PayoutApproval")),
         "record": nul(E("PayoutRecord")), "rejection_reason": nul(s()), "failure_reason": nul(s()), "cancellation_reason": nul(s()),
         "reversal_reason": nul(s()), "created_at": DT, "updated_at": DT, "version": INT,
-    }, ["id", "user_id", "amount_micros", "currency", "status", "payout_method", "approvals_required", "approvals", "created_at", "updated_at", "version"])
+    }, ["id", "code", "user_id", "amount_micros", "currency", "status", "payout_method", "approvals_required", "approvals", "created_at", "updated_at", "version"])
     S["PayoutCreate"] = obj({"amount_micros": {"type": "integer", "format": "int64", "minimum": 10000, "multipleOf": 10000},
                              "payout_method_id": UUID, "note": nul(s(maxl=500))}, ["amount_micros", "payout_method_id"], closed=True)
     S["ReasonRequest"] = obj({"reason": s(minl=5, maxl=2000)}, ["reason"], closed=True)
@@ -518,17 +525,41 @@ def build():
                                     ["decision"], closed=True)
     S["TakedownRequest"] = obj({"reason_code": en("rights_claim", "personal_data", "illegal_content", "policy_violation", "owner_request", "other"),
                                 "reason": s(minl=10, maxl=5000), "notify_owner": {"type": "boolean", "default": True}}, ["reason_code", "reason"], closed=True)
+    S["TakedownClaimCreate"] = obj({
+        "requester_name": s(minl=2, maxl=200), "requester_email": s(fmt="email", maxl=254), "requester_organization": nul(s(maxl=200)),
+        "claim_type": E("TakedownClaimType"),
+        "dataset_reference": nul(s(maxl=64, desc="Dataset code (`DS-YYYY-NNNNNN`) or UUID, if known.")),
+        "file_reference": nul(s(maxl=1024, desc="File name or id within the dataset, if known.")),
+        "description": s(minl=20, maxl=10000), "evidence_url": nul(s(fmt="uri", maxl=2048)),
+        "sworn_statement": {"type": "boolean", "const": True, "description": "Requester confirms the notice is accurate and they are the rights holder / person concerned or authorised to act for them."},
+        "website": s(maxl=0, desc="Honeypot; must be empty. Non-empty → silently dropped with 202."),
+    }, ["requester_name", "requester_email", "claim_type", "description", "sworn_statement"], closed=True)
+    S["TakedownCase"] = obj({
+        "id": UUID, "source": E("TakedownSource"), "status": E("TakedownStatus"), "claim_type": E("TakedownClaimType"),
+        "dataset_id": nul(UUID), "dataset_code": nul(CODE("DS")), "dataset_status": nul(E("DatasetStatus")), "file_id": nul(UUID),
+        "requester_user_id": nul(UUID), "requester_name": s(), "requester_email": s(), "requester_organization": nul(s()),
+        "description": s(), "evidence_url": nul(s()), "decided_by": nul(UUID), "decided_at": nul(DT), "decision_notes": nul(s()),
+        "created_at": DT, "updated_at": DT,
+    }, ["id", "source", "status", "claim_type", "requester_name", "requester_email", "description", "created_at", "updated_at"],
+       desc="A `takedown_requests` row (DATABASE_SCHEMA §4.7.6). Requester contact data is visible to `user.manage` holders only.")
+    S["TakedownDecision"] = obj({
+        "decision": en("under_review", "actioned", "rejected"),
+        "notes": s(minl=5, maxl=5000, desc="Stored in decision_notes; sent to the requester for actioned/rejected."),
+        "dataset_id": nul(UUID),
+        "apply_takedown": {"type": "boolean", "default": False, "description": "With decision=actioned: also take the linked dataset down in the same transaction (same effects as POST /admin/datasets/{id}/takedown)."},
+        "takedown_reason_code": nul(en("rights_claim", "personal_data", "illegal_content", "policy_violation", "owner_request", "other")),
+    }, ["decision", "notes"], closed=True)
     S["ExportFilters"] = obj({"dataset_ids": arr(UUID, maxItems=1000), "categories": arr(E("DatasetCategory")), "languages": arr(E("Language")),
                               "min_quality": nul({"type": "number", "minimum": 1, "maximum": 5}), "data_class": nul(E("DataClass")),
                               "finalized_from": nul(DT), "finalized_to": nul(DT)}, closed=True)
     S["ExportCreate"] = obj({"filters": E("ExportFilters"), "format": E("ExportFormat"), "include_metadata": {"type": "boolean", "default": True},
                              "include_annotations": {"type": "boolean", "default": False}, "note": nul(s(maxl=500))}, ["filters", "format"], closed=True)
     S["ExportFile"] = obj({"id": UUID, "name": s(), "size_bytes": BYTES, "sha256": SHA256}, ["id", "name", "size_bytes", "sha256"])
-    S["ExportJob"] = obj({"id": UUID, "status": E("ExportStatus"), "requested_by": UUID, "filters": E("ExportFilters"), "format": E("ExportFormat"),
+    S["ExportJob"] = obj({"id": UUID, "code": CODE("EX"), "status": E("ExportStatus"), "requested_by": UUID, "filters": E("ExportFilters"), "format": E("ExportFormat"),
                           "include_metadata": BOOL, "include_annotations": BOOL, "progress_percent": {"type": "integer", "minimum": 0, "maximum": 100},
                           "dataset_count": INT, "file_count": INT, "total_bytes": BYTES, "files": arr(E("ExportFile")), "error": nul(s()),
                           "created_at": DT, "started_at": nul(DT), "completed_at": nul(DT), "expires_at": nul(DT)},
-                         ["id", "status", "requested_by", "filters", "format", "progress_percent", "files", "created_at"])
+                         ["id", "code", "status", "requested_by", "filters", "format", "progress_percent", "files", "created_at"])
     S["ExportDownloadRequest"] = obj({"file_id": UUID}, ["file_id"], closed=True)
     S["AnalyticsOverview"] = obj({"from": DATE, "to": DATE, "users": obj({"registered": INT, "verified_contributors": INT, "active_30d": INT}),
                                   "datasets": obj({"submitted": INT, "approved": INT, "partially_approved": INT, "rejected": INT, "changes_requested": INT}),
@@ -557,7 +588,7 @@ def build():
 
 PAGINATED = ["User", "Dataset", "DatasetFile", "ReviewQueueItem", "Review", "LedgerLine", "EarningRecord", "Payout",
              "AnnotationProject", "AnnotationTask", "AnnotationVersion", "AnnotationReview", "Reward", "Conversation",
-             "Message", "Notification", "ExportJob", "AuditLog", "SecurityEvent", "ContributorVerification", "Adjustment"]
+             "Message", "Notification", "ExportJob", "AuditLog", "SecurityEvent", "ContributorVerification", "Adjustment", "TakedownCase"]
 
 def paginated(S):
     for n in PAGINATED:

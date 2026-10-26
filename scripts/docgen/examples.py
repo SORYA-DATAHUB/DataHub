@@ -50,7 +50,7 @@ PAYOUT_METHOD = {"id": PM, "type": "aba_pay", "label": "My ABA account", "is_def
 VERIFICATION = {"id": VER, "user_id": U_CON, "status": "pending", "legal_name": "Sophea Keo", "country": "KH", "date_of_birth": "1995-04-12",
                 "phone": "+85512345678", "id_document": {"filename": "national-id.jpg", "size_bytes": 412339, "content_type": "image/jpeg"},
                 "decision_reason": None, "decided_by": None, "decided_at": None, "submitted_at": T}
-DATASET = {"id": DS, "owner_id": U_CON, "owner_display_name": "Sophea K.", "title": "Khmer newspaper scans 1990–1999",
+DATASET = {"id": DS, "code": "DS-2026-000123", "owner_id": U_CON, "owner_display_name": "Sophea K.", "title": "Khmer newspaper scans 1990–1999",
            "description": "Scanned front pages of Phnom Penh newspapers, 300 dpi.", "data_class": "raw", "category": "news",
            "languages": ["km"], "tags": ["newspaper", "ocr"], "source_description": "Personal archive, scanned by me.",
            "contains_personal_data": False, "personal_data_notes": None, "status": "draft", "version_number": 1, "file_count": 2,
@@ -59,7 +59,7 @@ DATASET = {"id": DS, "owner_id": U_CON, "owner_display_name": "Sophea K.", "titl
            "created_at": T, "updated_at": T2, "version": 4}
 FILE = {"id": F1, "dataset_id": DS, "parent_file_id": None, "original_filename": "phnom-penh-post-1994-03.pdf",
         "relative_path": "1994/phnom-penh-post-1994-03.pdf", "member_path": None, "extension": "pdf", "declared_mime": "application/pdf",
-        "detected_mime": "application/pdf", "size_bytes": 367001600, "sha256": SHA, "processing_status": "ready", "scan_status": "clean", "scan_mode": "full",
+        "detected_mime": "application/pdf", "size_bytes": 367001600, "sha256": SHA, "processing_status": "ready", "scan_status": "clean",
         "failure_code": None, "failure_message": None, "is_container": False, "page_count": 48,
         "previews": [{"page": 1, "width": 1654, "height": 2339, "content_type": "image/webp"}], "text_available": False,
         "duplicates": [{"kind": "near", "method": "dhash", "distance": 3, "matched_file_id": None, "matched_dataset_id": None,
@@ -89,7 +89,7 @@ EARNING = {"id": "01930b75-6666-7f00-8000-0000000000e3", "user_id": U_CON, "sour
            "file_id": F1, "task_id": None, "accepted_bytes": 367001600, "data_class": "raw", "rate_micros_per_gb": 1000000, "pricing_rule_id": PR,
            "labeled_upgrade": False, "previously_paid_rate_micros_per_gb": None, "amount_micros": 367001, "journal_id": J1, "created_at": T2}
 APPROVAL = {"id": "01930b76-7777-7000-8000-000000000103", "payout_id": PO, "approver_id": U_ADM, "approver_name": "Admin Vanna", "comment": None, "created_at": T2}
-PAYOUT = {"id": PO, "user_id": U_CON, "user_display_name": "Sophea K.", "amount_micros": 10000000, "currency": "USD", "status": "requested",
+PAYOUT = {"id": PO, "code": "PO-2026-000042", "user_id": U_CON, "user_display_name": "Sophea K.", "amount_micros": 10000000, "currency": "USD", "status": "requested",
           "payout_method": {"id": PM, "type": "aba_pay", "label": "My ABA account", "details": {"account_name": "KEO SOPHEA", "account_number": "•••• 4821"}},
           "note": None, "approvals_required": 1, "approvals": [], "record": None, "rejection_reason": None, "failure_reason": None,
           "cancellation_reason": None, "reversal_reason": None, "created_at": T, "updated_at": T, "version": 1}
@@ -130,16 +130,23 @@ CONVERSATION = {"id": CV, "kind": "dataset", "subject": "Question about newspape
                 "created_at": T, "updated_at": T}
 NOTIF = {"id": NT, "type": "dataset_approved", "title": "Dataset approved", "body": "“Khmer newspaper scans 1990–1999” was approved. $0.36 credited.",
          "link": f"/datasets/{DS}", "data": {"dataset_id": DS}, "read_at": None, "created_at": T2}
-EXPORT = {"id": EX, "status": "completed", "requested_by": U_ADM,
+EXPORT = {"id": EX, "code": "EX-2026-000007", "status": "completed", "requested_by": U_ADM,
           "filters": {"dataset_ids": [], "categories": ["news"], "languages": ["km"], "min_quality": 4, "data_class": None, "finalized_from": None, "finalized_to": None},
           "format": "zip_originals", "include_metadata": True, "include_annotations": True, "progress_percent": 100, "dataset_count": 12,
-          "file_count": 1840, "total_bytes": 48318382080, "files": [{"id": EXF, "name": "datahub-export-01930b7a-part-001.zip", "size_bytes": 4831838208, "sha256": SHA}],
+          "file_count": 1840, "total_bytes": 48318382080, "files": [{"id": EXF, "name": "datahub-export-01930b7a-part-001.zip", "size_bytes": 3998712041, "sha256": SHA}],
           "error": None, "created_at": T, "started_at": T, "completed_at": T2, "expires_at": "2026-11-02T09:15:00Z"}
 AUDIT = {"id": AUD, "actor_id": U_ADM, "actor_email": "vanna@datahub.example", "action": "payout.approve", "entity_type": "payout_request",
          "entity_id": PO, "before": {"status": "requested"}, "after": {"status": "approved"}, "ip": "198.51.100.7",
          "user_agent": "Mozilla/5.0", "request_id": "req_01JBA7Q4M8", "created_at": T2}
 SETTING = {"key": "payout_dual_approval_threshold_micros", "value": 100000000, "value_type": "integer",
            "description": "Payouts ≥ this amount need two distinct approvers (HA-07).", "updated_by": None, "updated_at": T, "version": 1}
+
+TAKEDOWN = {"id": "01930b7f-0000-7900-8000-000000000a01", "source": "public_form", "status": "received", "claim_type": "copyright",
+            "dataset_id": DS, "dataset_code": "DS-2026-000123", "dataset_status": "approved", "file_id": None, "requester_user_id": None,
+            "requester_name": "Chan Vuthy", "requester_email": "rights@publisher.example", "requester_organization": "Angkor Press Co.",
+            "description": "Pages 1–48 of this dataset are scans of our 1994 newspaper editions, reproduced without permission.",
+            "evidence_url": "https://publisher.example/catalogue/1994", "decided_by": None, "decided_at": None, "decision_notes": None,
+            "created_at": T, "updated_at": T}
 
 def page(items, total=None):
     return {"items": items, "page": 1, "page_size": 25, "total": total if total is not None else len(items)}

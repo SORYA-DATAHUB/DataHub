@@ -4,12 +4,12 @@
 |---|---|
 | **Purpose** | Define exactly how dataset files (and the smaller attachment types) travel from a contributor's browser into private object storage, how they are validated, scanned, hashed, de-duplicated, previewed, served and eventually deleted — with the limits, keys, failure handling and performance targets the implementation must meet. |
 | **Scope** | Resumable multipart dataset uploads (`/datasets/{id}/uploads`, `/uploads/*`), the `processing` worker pipeline (sniffing, hashing, ClamAV, duplicates, archive expansion, previews, text extraction), preview/download URL issuance (`/files/*`), exports storage, message attachments, verification ID documents, payout proofs, bucket configuration (CORS, lifecycle, encryption, versioning) for SeaweedFS (dev) and Cloudflare R2 / AWS S3 (prod). Out of scope: review decisions (Data Quality & Review Specification), earnings math (Pricing & Payout Policy), backup schedules (Backup & DR Plan). |
-| **Assumptions** | A-03 scale (≤ 50 concurrent uploads, single file ≤ 5 GB, dataset ≤ 50 GB, ≤ 20 TB year 1); A-10 ClamAV fail-closed; A-11 no LibreOffice; A-15 retention defaults; modern evergreen browsers (Chrome/Edge/Firefox/Safari, last 2 versions) with `fetch`, `XMLHttpRequest` upload progress, `File.slice`, `localStorage`. |
+| **Assumptions** | A-03 scale (≤ 50 concurrent uploads, single file ≤ 4 GB (4,000,000,000 B, baseline AM-01), dataset ≤ 50 GB, ≤ 20 TB year 1); A-10 ClamAV fail-closed; A-11 no LibreOffice; A-15 retention defaults; modern evergreen browsers (Chrome/Edge/Firefox/Safari, last 2 versions) with `fetch`, `XMLHttpRequest` upload progress, `File.slice`, `localStorage`. |
 | **Decisions** | Browser uploads **directly to S3** with presigned UploadPart URLs; the API never proxies file bytes. Always S3 multipart (even 1-part files) with 16 MiB parts. Presigned PUT 15 min / GET 5 min, signed for the public S3 endpoint host. Server-generated object keys only. Magic-byte type detection is authoritative. Single streaming pass computes SHA-256, sniffs type and feeds clamd. Exact duplicates by SHA-256; near duplicates by 64-bit SimHash (text, Hamming ≤ 3) and 64-bit dHash (images/pages, Hamming ≤ 5). Previews are server-rendered WebP. Incomplete multipart uploads are aborted after 24 h. |
 | **Dependencies** | `ENGINEERING_BASELINE.md` §3, §7, §8.3, §9, §13; `API_DOCUMENTATION.md` (Uploads, Files, Exports, Messaging sections); `AUTH_AUTHORIZATION.md` §12 (file visibility rules); `openapi.yaml` schemas `UploadSession`, `DatasetFile`, `PresignedUrl`; libmagic, pypdfium2, Pillow, python-docx, openpyxl, striprtf, defusedxml, boto3, clamd. |
-| **Acceptance criteria** | (1) A 5 GB file uploads over a connection interrupted 3 times and resumed after a page reload without re-sending completed parts (E2E). (2) A renamed executable (`.exe` → `.pdf`) ends `failed: type_mismatch`/`disallowed_type`. (3) EICAR test file ends `quarantined` and is never previewable/downloadable/payable. (4) Zip-slip, zip-bomb (ratio > 100:1), > 10,000 members, symlink and nested-zip fixtures are all neutralised as specified in §13. (5) Same bytes uploaded twice produce an `exact` duplicate flag; a re-scanned copy of a page produces a `near` flag. (6) No object key contains user-supplied text (static test over key builders). (7) Presigned URLs expire on time (PUT 15 min, GET 5 min) and downloads always arrive as attachments. (8) Abandoned uploads leave no storage after 24 h (lifecycle + job). (9) Throughput ≥ 2 GB/min per worker for hash+scan on the reference host. |
+| **Acceptance criteria** | (1) A 4 GB (4,000,000,000 B) file uploads over a connection interrupted 3 times and resumed after a page reload without re-sending completed parts (E2E). (2) A renamed executable (`.exe` → `.pdf`) ends `failed: type_mismatch`/`disallowed_type`. (3) EICAR test file ends `quarantined` and is never previewable/downloadable/payable. (4) Zip-slip, zip-bomb (ratio > 100:1), > 10,000 members, symlink and nested-zip fixtures are all neutralised as specified in §13. (5) Same bytes uploaded twice produce an `exact` duplicate flag; a re-scanned copy of a page produces a `near` flag. (6) No object key contains user-supplied text (static test over key builders). (7) Presigned URLs expire on time (PUT 15 min, GET 5 min) and downloads always arrive as attachments. (8) Abandoned uploads leave no storage after 24 h (lifecycle + job). (9) Throughput ≥ 2 GB/min per worker for hash+scan on the reference host. |
 
-**Document control:** Version 1.0 · 2026-10-26 · Status: Baseline · Owner: Backend lead · Changes via `DECISION_LOG.md`.
+**Document control:** Version 1.1 · 2026-10-26 · Status: Baseline (v1.1: baseline §16 AM-01, AM-13 applied) · Owner: Backend lead · Changes via `DECISION_LOG.md`.
 
 ---
 
@@ -66,7 +66,7 @@ All values are `system_settings` keys (super_admin, `PUT /admin/settings/{key}`)
 
 | Limit | Setting | Default | Enforced at | Error |
 |---|---|---|---|---|
-| Max single file | `max_file_bytes` | 5,000,000,000 B (5 GB) | init (declared size), complete (HeadObject size) | `413 upload.file_too_large` |
+| Max single file (also every extracted ZIP member) | `max_file_bytes` | 4,000,000,000 B (4 GB decimal, baseline AM-01) — the setting validator refuses values above 4,000,000,000 because clamd cannot scan a single stream ≥ 4 GiB | init (declared size), complete (HeadObject size), archive expansion (member declared/actual size) | `413 upload.file_too_large`; member → `failed: archive_limit_exceeded` |
 | Max dataset size | `max_dataset_bytes` | 50,000,000,000 B (50 GB) | init (Σ dataset files incl. pending sessions + new), complete | `413 upload.dataset_too_large` |
 | Unreviewed storage per user | `user_pending_quota_bytes` | 200,000,000,000 B (200 GB) | init and complete | `413 upload.quota_exceeded` (`details.used_bytes`, `details.quota_bytes`) |
 | Files per dataset (excluding archive members) | `max_files_per_dataset` | 2,000 | init | `409 dataset.file_limit_exceeded` |
@@ -121,7 +121,7 @@ Server (one transaction):
 
 Response `201`: `{upload_id, file_id, part_size, part_count, expires_at, status:"initiated", uploaded_parts:[]}`.
 
-Part size: `part_size = max(16 MiB, ceil_to_MiB(ceil(size_bytes / 10000)))`; `part_count = ceil(size_bytes / part_size)` (≤ 10,000; for the 5 GB maximum this is 299 parts of 16 MiB). All parts except the last are exactly `part_size`; S3's 5 MiB minimum applies to every part except the last, which 16 MiB satisfies.
+Part size: `part_size = max(16 MiB, ceil_to_MiB(ceil(size_bytes / 10000)))`; `part_count = ceil(size_bytes / part_size)` (≤ 10,000; for the 4,000,000,000 B maximum this is 239 parts of 16 MiB). All parts except the last are exactly `part_size`; S3's 5 MiB minimum applies to every part except the last, which 16 MiB satisfies.
 
 ### 4.2 Part URLs — `POST /api/v1/uploads/{upload_id}/part-urls`
 
@@ -211,8 +211,8 @@ File states (baseline §9): `pending_upload → uploaded → processing → read
 |---|---|
 | Engine | `clamav/clamav:stable`, `clamd` on internal port 3310 (no host port), `freshclam` updates every 2 h |
 | Protocol | `zINSTREAM` with 8 MiB chunks streamed from the S3 read pass (no temp file) |
-| clamd.conf | `StreamMaxLength 2000M`, `MaxFileSize 2000M`, `MaxScanSize 4000M`, `MaxFiles 10000`, `MaxRecursion 16`, `MaxScanTime 600000`, `AlertExceedsMax yes`, `AlertEncrypted yes`, `AlertBrokenExecutables yes`, `AlertOLE2Macros yes`, `ConcurrentDatabaseReload no` |
-| Size limitation | ClamAV cannot scan a single stream larger than ~2 GB. Files ≤ 2,000,000,000 B are scanned whole (`scan_mode=full`). Larger files are scanned in **windows of 1 GiB with 16 MiB overlap** (`scan_mode=windowed`); every window must be clean. Windowed files are flagged in the reviewer workspace. ZIP members are scanned individually, so large archives are scanned per member. |
+| clamd.conf | `StreamMaxLength 4000M`, `MaxFileSize 4000M`, `MaxScanSize 4000M` (baseline AM-01),  `MaxFiles 10000`, `MaxRecursion 16`, `MaxScanTime 600000`, `AlertExceedsMax yes`, `AlertEncrypted yes`, `AlertBrokenExecutables yes`, `AlertOLE2Macros yes`, `ConcurrentDatabaseReload no` |
+| Size limitation | clamd cannot scan a single stream ≥ 4 GiB. DataHub therefore caps every uploaded file **and every extracted ZIP member** at 4,000,000,000 B (AM-01), so every scannable object is scanned **whole** in one INSTREAM — there is no windowed/partial scanning and no `scan_mode` field. ZIP containers are hashed but not scanned (`scan_status=skipped_container`); each member is scanned individually. A `Heuristics.Limits.Exceeded` verdict is never treated as clean. |
 | Verdicts | `OK` → `clean`. `FOUND` → `infected`, file `quarantined` (object moved to `quarantine/{file_id}/original`, original key deleted, signature name stored, admin notified, contributor sees "blocked by security scan"). `Heuristics.Limits.Exceeded`, `Heuristics.Encrypted.*` → treated as **not clean**: `failed` (`archive_limit_exceeded` / `encrypted`). Connection error/timeout → retry (3× task retries + up to 6 h deferred retries), then `scan_status=error`, `failed: scan_error`. |
 | Fail-closed rule | A file whose `scan_status ≠ clean` can never be reviewed as accepted, previewed to anyone but admins, exported, annotated or paid. If clamd is down, files wait in `processing`; `/readyz` reports `degraded`; an alert fires after 15 min. There is **no** configuration to skip scanning. |
 | Rescan | `POST /admin/files/{id}/rescan` (and an automatic rescan of `error` files after signature updates). Already-accepted files that become `infected` on rescan are quarantined, removed from exports, and an admin task is opened to decide on a clawback adjustment. |
@@ -284,6 +284,7 @@ Runs in the processing worker inside a **sandboxed subprocess** per file: `RLIMI
 2. **Limits (baseline §7)** checked *before* extracting anything, from central-directory metadata:
    - members ≤ 10,000 (directories excluded) — else container `failed: archive_limit_exceeded`;
    - Σ declared uncompressed sizes ≤ 20 GB — else `archive_limit_exceeded`;
+   - every member's declared uncompressed size ≤ `max_file_bytes` (4,000,000,000 B, AM-01) — larger members are not extracted and are recorded `failed: archive_limit_exceeded`;
    - also the expanded members must fit the dataset limit (50 GB) and member count does not count toward the 2,000-file limit.
 3. **Per-member checks:**
    - Name sanitisation: decode as UTF-8 (flag bit 11) else CP437; normalise NFC; reject absolute paths, drive letters, `..` segments, backslash traversal, empty names, names > 1,024 bytes → member `failed: unsafe_member_path` (recorded with sanitised display path).
@@ -365,7 +366,7 @@ Application retention (`retention.purge`, daily; A-15 defaults pending HA-03 leg
 | Verification ID documents | 1 year after decision, or at account anonymisation if earlier (final period subject to HA-03) | delete |
 | Payout proofs | 7 years (financial record) | delete |
 
-Versioning: AWS S3 and SeaweedFS buckets enable object versioning (RPO protection against accidental deletes, baseline §14). Cloudflare R2 does not offer object versioning; on R2 the Backup & DR Plan's nightly replication of new/changed objects to a secondary bucket provides the equivalent protection. Legal deletion removes every version and the replica copy.
+Versioning / object backup (baseline AM-13): AWS S3 and SeaweedFS buckets enable object versioning plus a lifecycle rule expiring noncurrent versions after 30 days (RPO protection against accidental deletes, baseline §14). Cloudflare R2 has no object versioning; on R2 a nightly `rclone sync` copies `datahub-private` to a separate backup bucket at a different provider/account, keeping deleted or overwritten objects for 30 days (rclone `--backup-dir` with dated folders purged after 30 days). Legal deletion removes every version and the replica copy.
 
 ## 18. Failure recovery
 
@@ -390,10 +391,10 @@ Versioning: AWS S3 and SeaweedFS buckets enable object versioning (RPO protectio
 
 ## 19. Large-file performance
 
-- **No API in the data path:** bytes go browser → S3; the API handles only small JSON calls, so 50 concurrent 5 GB uploads do not load the API (A-03).
-- **Part sizing:** 16 MiB balances retry cost (≤ 16 MiB re-sent per failure) against request overhead (299 requests for 5 GB). Concurrency 4 parts/file × 3 files saturates typical 100–500 Mbit/s links.
+- **No API in the data path:** bytes go browser → S3; the API handles only small JSON calls, so 50 concurrent 4 GB uploads do not load the API (A-03).
+- **Part sizing:** 16 MiB balances retry cost (≤ 16 MiB re-sent per failure) against request overhead (239 requests for 4 GB). Concurrency 4 parts/file × 3 files saturates typical 100–500 Mbit/s links.
 - **Presign batching:** up to 100 URLs per call; client requests the next batch when < 20 unused URLs remain.
-- **Worker throughput target:** ≥ 2 GB/min per worker for hash + scan (baseline §14). Single pass (one `GetObject` stream feeds SHA-256 ≈ 1 GB/s and clamd); 8 MiB buffers; clamd with `MaxThreads` = CPU cores; `processing` workers concurrency = cores/2, prefetch 1 so a 5 GB file does not block other files queued on the same worker.
+- **Worker throughput target:** ≥ 2 GB/min per worker for hash + scan (baseline §14). Single pass (one `GetObject` stream feeds SHA-256 ≈ 1 GB/s and clamd); 8 MiB buffers; clamd with `MaxThreads` = CPU cores; `processing` workers concurrency = cores/2, prefetch 1 so a 4 GB file does not block other files queued on the same worker.
 - **Memory:** never load a whole file; streaming everywhere; previews rendered page by page and uploaded immediately; ZIP via ranged reads.
 - **Archives:** members extracted in parallel streams (up to 4) with bounded memory; DB inserts batched (500 rows).
 - **Storage requests:** previews are small objects; batch `DeleteObjects` (1,000 keys) for purges; ListParts paginated.
@@ -450,7 +451,7 @@ These small uploads pass through the API (Starlette spools to a temp file ≤ 10
 
 | Test | Level |
 |---|---|
-| Part-size computation (edge sizes 1 B, 16 MiB, 16 MiB + 1, 5 GB, 160 GiB hypothetical) | unit |
+| Part-size computation (edge sizes 1 B, 16 MiB, 16 MiB + 1, 4,000,000,000 B (max), 4,000,000,001 B (rejected), 160 GiB hypothetical) | unit |
 | Init limits & quota with concurrent requests (advisory lock) | integration (Postgres) |
 | Presigned URL host/expiry (`S3_PUBLIC_ENDPOINT`), expired URL → 403 | integration (SeaweedFS) |
 | Complete with missing/mismatched parts; idempotent complete | integration |
@@ -458,7 +459,7 @@ These small uploads pass through the API (Starlette spools to a temp file ≤ 10
 | Magic-byte fixtures: renamed exe, HTML-as-txt, SVG, docm, PDF-as-JPEG | worker unit |
 | EICAR plain, EICAR inside ZIP, encrypted ZIP | worker integration (real clamd) |
 | ZIP fixtures: zip-slip (`../../etc/passwd`), absolute path, symlink, 10,001 members, 1 GB→10 MB bomb (ratio > 100), nested zip, CP437 names, bidi-override names | worker integration |
-| Windowed scan path for a 2.5 GB synthetic file | nightly performance job |
+| Whole-stream scan of a 3.9 GB synthetic file within `MaxScanTime`; 4,000,000,001 B file and ZIP member rejected (AM-01) | nightly performance job |
 | Exact/near duplicate: identical bytes; re-saved JPEG (dHash ≤ 5); text with minor edits (SimHash ≤ 3); Khmer text with ZWSP variations | unit + integration |
 | Preview sandbox limits (huge-pixel PNG, 2,000-page PDF → 500 previews) | worker integration |
 | Download URL headers: attachment disposition, forced content type, 5-min expiry | integration |

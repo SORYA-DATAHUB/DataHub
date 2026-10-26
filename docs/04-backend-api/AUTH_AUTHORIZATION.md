@@ -7,9 +7,9 @@
 | **Assumptions** | Single organisation operator (A-01); ≤ 2,000 users, ≤ 200 concurrent sessions (A-03); web app and API share one origin so first-party `SameSite=Lax` cookies work; SMTP provider configured (A-12); clocks synchronised by NTP (TOTP tolerance ±30 s). |
 | **Decisions** | Opaque server-side sessions (no JWT) in an HttpOnly cookie `dh_session`; SHA-256 of the token stored. CSRF double-submit cookie `dh_csrf` + `X-CSRF-Token` + Origin check. Argon2id passwords (argon2-cffi, t=3, m=64 MiB, p=4). TOTP MFA mandatory for admin/super_admin, step-up within 15 min for financial/privileged actions. Enumeration-safe register/forgot. 10 consecutive failures → 15-minute lock. Permission codes per baseline §6 enforced by a FastAPI dependency plus service-level resource checks; hidden resources return 404. |
 | **Dependencies** | `ENGINEERING_BASELINE.md` §3, §6, §9, §12; `API_DOCUMENTATION.md`; `openapi.yaml` (`x-permission`, `x-admin-mfa`, `x-step-up-mfa` extensions drive the matrix tests); Database Schema (`users`, `user_sessions`, `email_verifications`, `mfa_recovery_codes`, `security_events`, `roles`, `user_roles`, `audit_logs`); Security Requirements and Threat Model documents. |
-| **Acceptance criteria** | (1) All rules in §§3–13 have automated tests (§16). (2) The generated endpoint × role matrix test suite passes for all 143 operations with 0 unexpected allows. (3) No password, token, TOTP secret or recovery code is ever stored in plaintext or logged (log-scrubber test). (4) Suspension revokes all sessions and closes WebSockets within 5 s. (5) Financial actions without fresh MFA are refused with `auth.step_up_required`. (6) Separation-of-duties rules in §12.3 each have a negative test. |
+| **Acceptance criteria** | (1) All rules in §§3–13 have automated tests (§16). (2) The generated endpoint × role matrix test suite passes for all 146 operations with 0 unexpected allows. (3) No password, token, TOTP secret or recovery code is ever stored in plaintext or logged (log-scrubber test). (4) Suspension revokes all sessions and closes WebSockets within 5 s. (5) Financial actions without fresh MFA are refused with `auth.step_up_required`. (6) Separation-of-duties rules in §12.3 each have a negative test. |
 
-**Document control:** Version 1.0 · 2026-10-26 · Status: Baseline · Owner: Security lead / Backend lead · Changes via `DECISION_LOG.md`.
+**Document control:** Version 1.1 · 2026-10-26 · Status: Baseline (v1.1 — baseline §16 amendments AM-01…AM-14 applied) · Owner: Security lead / Backend lead · Changes via `DECISION_LOG.md`.
 
 ---
 
@@ -101,7 +101,7 @@ Comparison uses the hash lookup (constant-time by construction, no string compar
 1. CSRF + Origin check (anonymous binding); rate limits `5/min per (IP, email)` and `20/min per IP`.
 2. Look up user by `citext` email. If not found: verify the password against a fixed dummy Argon2id hash (equal cost) and return `401 auth.invalid_credentials`.
 3. If `locked_until > now()`: return `429 auth.account_locked` with `details.retry_after_seconds` **without** verifying the password (so locking cannot be used as an oracle beyond the lock itself).
-4. Verify password. On failure: increment `failed_login_count`; at **10 consecutive failures** set `locked_until = now() + 15 min`, reset the counter, write security event `account_locked`, email the user ("someone tried to sign in…" with reset link). Return `401 auth.invalid_credentials`.
+4. Verify password. On failure: increment `failed_login_count`; at **5 failures within 15 minutes** (counter window `LOGIN_LOCK_WINDOW_SECONDS`) set `locked_until = now() + 15 min`, reset the counter, write security event `account_locked`, email the user ("someone tried to sign in…" with reset link). Return `401 auth.invalid_credentials`.
 5. On success: reset `failed_login_count`; check status (`suspended` → `403 auth.account_suspended`, `deactivated`/`anonymized` → `403 auth.account_inactive`).
 6. Create session (§7): revoke the presented pre-login session (if any), issue a new token, set cookies, rotate CSRF.
 7. Response:
@@ -131,8 +131,8 @@ The lock is per account; the per-IP limits stop horizontal (credential-stuffing)
 | Token | `secrets.token_urlsafe(32)` — 256-bit, opaque |
 | Cookie | `dh_session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/` (no `Domain` attribute → host-only). In development over `http://localhost`, `Secure` is dropped only when `ENV=development`. Cookie name prefix `__Host-` is not used because the dev setup runs over HTTP; production may enable `SESSION_COOKIE_NAME=__Host-dh_session` without code changes. |
 | Server record | `user_sessions(id, user_id, token_hash SHA-256 unique, created_at, last_seen_at, idle_expires_at, absolute_expires_at, mfa_verified_at, mfa_pending bool, ip, user_agent, revoked_at, revoked_reason, rotated_from)` |
-| Idle timeout | 7 days for users; **12 hours** if the user holds `admin` or `super_admin` (evaluated per request, so a role grant shortens existing sessions) |
-| Absolute timeout | 30 days from creation, regardless of activity (rotation keeps the original `absolute_expires_at`) |
+| Idle timeout | 7 days for users; **30 minutes** if the user holds `admin` or `super_admin` (evaluated per request, so a role grant shortens existing sessions) — baseline AM-08 |
+| Absolute timeout | 30 days from creation for users; **12 hours** for sessions of users holding `admin`/`super_admin`; regardless of activity (rotation keeps the original `absolute_expires_at`) |
 | Sliding | `last_seen_at`/`idle_expires_at` updated at most once per 60 s per session |
 | Rotation | New token + new row (old row revoked with reason `rotated`) on: login, MFA verification (pending → verified), MFA enable, password change, role change of the user (next request), privilege-sensitive reactivation. Prevents session fixation. |
 | Lookup | `SHA-256(cookie)` → indexed row; cached in Redis for 60 s keyed by hash (`session:{hash}` → user id, roles, flags); revocation deletes the cache key, so revocation is effective immediately on all API replicas. |
@@ -175,7 +175,7 @@ Login, register, forgot/reset and verify-email (unauthenticated unsafe methods) 
 - Payouts: approve, reject, mark-paid, mark-failed, cancel (admin), reverse.
 - Ledger: adjustments; pricing-rule creation.
 - Users: suspend, reactivate, role changes, revoke sessions.
-- Datasets: takedown. Exports: create.
+- Datasets: takedown; takedown-request decisions (`POST /admin/takedown-requests/{id}/decision`, AM-04). Exports: create.
 - Settings: `PUT /admin/settings/{key}`.
 
 ## 10. Administrative authentication
@@ -183,7 +183,7 @@ Login, register, forgot/reset and verify-email (unauthenticated unsafe methods) 
 - Admin and super_admin accounts are normal users with additional roles. The **first super_admin** is created only with the server-side CLI `scripts/create-admin` (prompts for email and password interactively, never via arguments or environment). There is no web sign-up path to admin.
 - Further admins are created by a super_admin granting the role (`PUT /admin/users/{id}/roles`, step-up). Granting `admin`/`super_admin` forces MFA enrolment on the grantee's next request (`auth.mfa_enrollment_required`) and rotates their session.
 - `ADMIN_MFA_REQUIRED=true` (default, must stay true in production; startup fails if false with `ENV=production`). With it, every endpoint flagged `x-admin-mfa` (all `/admin/*`, `/pricing-rules`, annotation project/assignment management) requires an MFA-verified session (`403 auth.mfa_required`).
-- Admin sessions: 12-hour idle timeout, 30-day absolute; step-up window 15 minutes.
+- Admin sessions: 30-minute idle timeout, 12-hour absolute lifetime; step-up window 15 minutes (baseline AM-08).
 - Optional `ADMIN_IP_ALLOWLIST` (CIDR list): when set, admin-flagged endpoints from other IPs return `403 permission.denied` and a security event.
 - All admin mutations write `audit_logs` (actor, action, entity, before/after diff, IP, request_id). Viewing sensitive data (unmasked payout details, verification ID documents, audit log) is itself audited.
 - Admins do not hold `payout.request` (baseline §6), which removes any self-payment path. Admins may create datasets (`dataset.create`, e.g. platform-owned data) but can never review them (SoD), and any earnings credited to a staff wallet cannot be withdrawn in v1. A staff member who also contributes privately uses a separate contributor account.
@@ -282,14 +282,14 @@ Redis sliding-window limiter; keys hashed (`rl:{class}:{sha256(key)}`), response
 | Action | Limit | Key | On exceed |
 |---|---|---|---|
 | Login | 5 / min; 20 / min | IP + email; IP | `429 rate_limited` |
-| Account lockout | 10 consecutive failed passwords → locked 15 min | account | `429 auth.account_locked` + email |
+| Account lockout | 5 failed passwords within 15 min → locked 15 min | account | `429 auth.account_locked` + email |
 | MFA verify | 5 / min; 20 / h; 10 consecutive failures revoke pending session | session; user | `429 rate_limited` |
 | Register | 5 / h | IP | `429 rate_limited` |
 | Forgot password | 3 / h; 10 / h | email; IP | silently not sent (still `202`) / `429` for IP |
 | Resend verification | 3 / h | user | `429 rate_limited` |
 | Verify-email / reset-password submit | 10 / h | IP | `429 rate_limited` |
 | Change password, MFA setup/disable, add payout method | 5 / h | user | `429 rate_limited` |
-| Contact form | 5 / h (+ honeypot) | IP | `429` / silent drop |
+| Contact form; public takedown notice (`POST /public/takedown-requests`, AM-04) | 5 / h each (+ honeypot) | IP | `429` / silent drop |
 | Withdrawal request | 10 / h | user | `429 rate_limited` |
 | Authenticated reads / writes | 600 / min; 120 / min | user | `429 rate_limited` |
 | Upload control calls | 600 / min | user | `429 rate_limited` |
@@ -298,6 +298,7 @@ Redis sliding-window limiter; keys hashed (`rl:{class}:{sha256(key)}`), response
 | Exports | 10 / h | user | `429 rate_limited` |
 | WebSocket connect | 10 / min, ≤ 5 concurrent | user | close 4429 |
 | Global safety net | 1,200 / min | IP | `429 rate_limited` |
+| Maintenance mode (AM-06) | `maintenance_mode=true` | all non-exempt endpoints | `503 service_unavailable`, `details.reason="maintenance"`; `/healthz`, `/readyz`, `/auth/*`, `/admin/*` and admin-MFA endpoints keep working, so admins can still sign in |
 
 Full per-endpoint classes: `API_DOCUMENTATION.md` §8. Auth-class limiters fail **closed** if Redis is unavailable; others fail open with an alert. Rate-limit hits are recorded as `rate_limited` security events (sampled 1:10 for read/write classes). The client IP is taken from `X-Forwarded-For` only when the immediate peer is the trusted proxy (`TRUSTED_PROXIES`).
 
@@ -352,7 +353,7 @@ Revocation is effective on the next request on every replica (Redis cache key de
 5. **Separation-of-duties tests:** one negative test per row in §12.3 (self-review, self-approval, second approval by same admin, self-adjustment, self-role-change, last super_admin).
 6. **Session tests:** idle/absolute expiry with frozen time (`time-machine`), rotation on login/MFA/password change (old token rejected), revocation propagation across two app instances sharing Redis, cookie attributes (HttpOnly/Secure/SameSite/Path).
 7. **CSRF tests:** missing header, mismatched header, token bound to another session, wrong Origin, form-encoded body → all 403/415.
-8. **Credential tests:** enumeration (register/forgot responses and timing within ±50 ms for known vs unknown emails over 50 samples), lockout after 10 failures and unlock after 15 min, token single-use and expiry, Argon2 parameters and rehash, password-policy reasons.
+8. **Credential tests:** enumeration (register/forgot responses and timing within ±50 ms for known vs unknown emails over 50 samples), lockout after 5 failures within 15 min and unlock after 15 min, token single-use and expiry, Argon2 parameters and rehash, password-policy reasons.
 9. **Rate-limit tests:** each auth class triggers 429 with `Retry-After`; Redis-down behaviour (auth fails closed).
 10. **E2E (Playwright):** login + MFA for admin, step-up dialog on payout approval, suspended user kicked out of an open tab, contributor cannot reach admin routes (UI + API).
 11. **CI gate:** matrix and authz suites run on every pull request; a failing or skipped authorization test blocks merge. Security review checklist requires updating Appendix A when adding endpoints.
@@ -364,8 +365,9 @@ Revocation is effective on the next request on every replica (Redis cache key de
 | `SESSION_COOKIE_NAME` | `dh_session` | `__Host-dh_session` optional in production |
 | `CSRF_COOKIE_NAME` | `dh_csrf` | |
 | `SESSION_IDLE_SECONDS_USER` | 604800 (7 d) | |
-| `SESSION_IDLE_SECONDS_ADMIN` | 43200 (12 h) | |
-| `SESSION_ABSOLUTE_SECONDS` | 2592000 (30 d) | |
+| `SESSION_IDLE_SECONDS_ADMIN` | 1800 (30 min) | AM-08 |
+| `SESSION_ABSOLUTE_SECONDS` | 2592000 (30 d) | users |
+| `SESSION_ABSOLUTE_SECONDS_ADMIN` | 43200 (12 h) | AM-08; sessions of users holding admin/super_admin |
 | `STEP_UP_SECONDS` | 900 (15 min) | |
 | `ADMIN_MFA_REQUIRED` | `true` | must be true in production (startup check) |
 | `ADMIN_IP_ALLOWLIST` | empty | CIDR list |
@@ -374,7 +376,7 @@ Revocation is effective on the next request on every replica (Redis cache key de
 | `WEB_ORIGIN` | `http://localhost:3410` (dev) | used to build email links |
 | `PASSWORD_BREACH_CHECK` | `true` prod / `false` dev | HIBP k-anonymity |
 | `ARGON2_TIME_COST` / `ARGON2_MEMORY_KIB` / `ARGON2_PARALLELISM` | 3 / 65536 / 4 | raising triggers rehash on login |
-| `LOGIN_LOCK_THRESHOLD` / `LOGIN_LOCK_SECONDS` | 10 / 900 | |
+| `LOGIN_LOCK_THRESHOLD` / `LOGIN_LOCK_WINDOW_SECONDS` / `LOGIN_LOCK_SECONDS` | 5 / 900 / 900 | AM-08 |
 | `EMAIL_TOKEN_TTL_SECONDS` / `RESET_TOKEN_TTL_SECONDS` | 86400 / 3600 | |
 | `CORS_ALLOWED_ORIGINS` | web origin | also used for Origin checks and WebSocket |
 | `TRUSTED_PROXIES` | Caddy container network | for client-IP extraction |
@@ -419,6 +421,7 @@ Legend: **✓** allowed · **M** allowed with an MFA-verified admin session · *
 | GET | `/api/v1/public/pricing` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | GET | `/api/v1/public/formats` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | POST | `/api/v1/public/contact` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| POST | `/api/v1/public/takedown-requests` | `public` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | POST | `/api/v1/datasets` | `dataset.create` | ✓ᴿ | — | — | ✓ᴿ | ✓ᴿ | lists only caller's datasets |
 | GET | `/api/v1/datasets` | `dataset.read.own` | ✓ᴿ | — | — | ✓ᴿ | ✓ᴿ | lists only caller's datasets |
 | GET | `/api/v1/datasets/{dataset_id}` | `dataset.read.own` | ✓ᴿ | — | — | ✓ᴿ | ✓ᴿ | owner; reads also: assigned reviewer, `dataset.read.any` |
@@ -518,6 +521,8 @@ Legend: **✓** allowed · **M** allowed with an MFA-verified admin session · *
 | GET | `/api/v1/admin/datasets/{dataset_id}` | `dataset.read.any` | — | — | — | M | M |  |
 | POST | `/api/v1/admin/datasets/{dataset_id}/takedown` | `dataset.read.any` | — | — | — | S | S |  |
 | POST | `/api/v1/admin/files/{file_id}/rescan` | `dataset.read.any` | — | — | — | M | M |  |
+| GET | `/api/v1/admin/takedown-requests` | `user.manage` | — | — | — | M | M |  |
+| POST | `/api/v1/admin/takedown-requests/{takedown_id}/decision` | `user.manage` | — | — | — | S | S |  |
 | POST | `/api/v1/admin/exports` | `dataset.export` | — | — | — | S | S |  |
 | GET | `/api/v1/admin/exports` | `dataset.export` | — | — | — | M | M |  |
 | GET | `/api/v1/admin/exports/{export_id}` | `dataset.export` | — | — | — | M | M |  |

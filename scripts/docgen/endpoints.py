@@ -137,13 +137,21 @@ ep("GET", "/public/pricing", "Public", "Current published rates", auth="public",
 ep("GET", "/public/formats", "Public", "Allowed formats and upload limits", auth="public", rl="public", resp="FormatList",
    rex={"items": [{"extension": "pdf", "mime_types": ["application/pdf"], "allowed": True, "preview": "page_images", "annotatable": "page_level", "payable": "yes", "notes": "First 500 pages rendered."},
                   {"extension": "zip", "mime_types": ["application/zip"], "allowed": True, "preview": "member_list", "annotatable": "no", "payable": "members_only", "notes": "Container never payable; members processed individually."}],
-        "limits": {"max_file_bytes": 5000000000, "max_dataset_bytes": 50000000000, "user_pending_quota_bytes": 200000000000, "max_files_per_dataset": 2000, "part_size_bytes": 16777216}},
+        "limits": {"max_file_bytes": 4000000000, "max_dataset_bytes": 50000000000, "user_pending_quota_bytes": 200000000000, "max_files_per_dataset": 2000, "part_size_bytes": 16777216}},
    desc="Machine-readable form of baseline §7 plus `extra_allowed_extensions`. Used by the uploader for client-side pre-checks.", verified=False)
 ep("POST", "/public/contact", "Public", "Contact form", auth="public", rl="contact", body="ContactRequest", ok=202, resp="Accepted",
    req={"name": "Dara", "email": "dara@example.org", "subject": "Partnership", "message": "We have 20k scanned Khmer forms. Can we contribute?"},
    rex={"status": "accepted", "message": "Thanks — we will reply by email."},
    desc="Creates a support conversation (kind `support`, no user) visible in the admin inbox and an email to the support address. Honeypot field `website` (must be empty) silently drops bots with 202.", verified=False)
 
+ep("POST", "/public/takedown-requests", "Public", "Submit a takedown / rights or privacy complaint", auth="public", rl="contact", body="TakedownClaimCreate", ok=202, resp="Accepted",
+   req={"requester_name": "Chan Vuthy", "requester_email": "rights@publisher.example", "requester_organization": "Angkor Press Co.", "claim_type": "copyright",
+        "dataset_reference": "DS-2026-000123", "file_reference": None, "description": "Pages 1–48 of this dataset are scans of our 1994 newspaper editions, reproduced without permission.",
+        "evidence_url": "https://publisher.example/catalogue/1994", "sworn_statement": True, "website": ""},
+   rex={"status": "accepted", "message": "Your notice has been received. We will acknowledge it by email within 2 business days."},
+   desc="For rights holders and data subjects; **no login required** (AM-04). Creates a `takedown_requests` row (`source=public_form`, `status=received`), resolves `dataset_reference` (code or UUID) to `dataset_id` when it matches (the response never reveals whether it matched), emails an acknowledgement to the requester, and notifies `user.manage` holders. Rate-limited 5 / h per IP; honeypot `website` must be empty (bots get a silent 202). Signed-in users may use it too (`requester_user_id` is recorded).",
+   val=["requester_name 2–200 chars; requester_email valid email", "claim_type ∈ TakedownClaimType", "description 20–10,000 chars", "sworn_statement must be true", "evidence_url http(s) only"],
+   verified=False)
 # ============================ DATASETS (owner) ============================
 DS_SORT = ["created_at", "updated_at", "title", "total_bytes", "submitted_at"]
 ep("POST", "/datasets", "Datasets", "Create a dataset (draft)", perm="dataset.create", body="DatasetCreate", ok=201, resp="Dataset", onb=True,
@@ -223,13 +231,13 @@ ep("DELETE", "/uploads/{upload_id}", "Uploads", "Abort an upload", perm="dataset
 
 # ============================ REVIEW ============================
 ep("GET", "/reviews/queue", "Review", "Datasets awaiting review", perm="dataset.review", paged=True, sort=["submitted_at", "total_bytes"], resp="PaginatedReviewQueueItem",
-   rex=page([{"dataset_id": DS, "title": DATASET["title"], "owner_display_name": "Sophea K.", "data_class": "raw", "category": "news", "languages": ["km"], "file_count": 2, "total_bytes": 734003200, "submitted_at": T2, "version_number": 1, "has_duplicate_flags": True, "contains_personal_data": False, "status": "submitted", "claimed_review_id": None}]),
+   rex=page([{"dataset_id": DS, "dataset_code": DATASET["code"], "title": DATASET["title"], "owner_display_name": "Sophea K.", "data_class": "raw", "category": "news", "languages": ["km"], "file_count": 2, "total_bytes": 734003200, "submitted_at": T2, "version_number": 1, "has_duplicate_flags": True, "contains_personal_data": False, "status": "submitted", "claimed_review_id": None}]),
    q=[q("status", en("submitted", "in_review"), "Default submitted."), q("data_class", {"$ref": "#/components/schemas/DataClass"}, "Filter."), q("category", {"$ref": "#/components/schemas/DatasetCategory"}, "Filter."),
       q("language", s(maxl=3), "Filter."), q("mine", BOOL, "Only reviews claimed by me.")],
    desc="FIFO by submitted_at by default. Excludes the caller's own datasets (separation of duties).")
 ep("POST", "/datasets/{dataset_id}/claim-review", "Review", "Claim a submitted dataset for review", perm="dataset.review", ok=201, resp="Review", rex=REVIEW,
-   desc="`submitted → in_review`; creates `dataset_reviews` (`in_progress`) with the caller as assignee. Uses `SELECT … FOR UPDATE SKIP LOCKED`-style guard; a concurrent claim gets 409. Owner cannot claim.",
-   err=["review.already_claimed", "dataset.invalid_state", "permission.separation_of_duties"])
+   desc="`submitted → in_review`; creates `dataset_reviews` (`in_progress`) with the caller as assignee. Uses `SELECT … FOR UPDATE SKIP LOCKED`-style guard; a concurrent claim gets 409. Owner cannot claim. A reviewer may hold at most `review_max_active_claims` (setting, default 5) in-progress reviews (AM-09).",
+   err=["review.claim_limit_reached", "review.already_claimed", "dataset.invalid_state", "permission.separation_of_duties"])
 ep("GET", "/reviews/{review_id}", "Review", "Review workspace data", perm="dataset.review", resp="ReviewDetail",
    rex={"review": REVIEW, "dataset": dict(DATASET, status="in_review"), "files": [FILE], "file_reviews": [FILE_REVIEW], "summary": SUMMARY, "history": []},
    desc="Assignee reviewer, or `dataset.read.any`. Includes duplicate matches with matched ids, previous versions' finalized reviews (`history`).")
@@ -285,7 +293,7 @@ ep("GET", "/admin/finance/overview", "Admin finance", "Finance dashboard figures
         "paid_this_month_micros": 410000000, "earned_this_month_micros": 530120000, "open_payouts": {"requested_count": 4, "requested_micros": 45000000, "approved_count": 1, "approved_micros": 10000000, "awaiting_second_approval_count": 1},
         "last_reconciliation": {"run_at": "2026-10-26T00:10:00Z", "status": "ok"}})
 ep("GET", "/admin/payouts", "Admin finance", "Payout requests", perm="finance.read", admin=True, paged=True, sort=["created_at", "amount_micros", "updated_at"], resp="PaginatedPayout", rex=page([PAYOUT]),
-   q=[q("status", {"$ref": "#/components/schemas/PayoutStatus"}, "Filter (repeatable)."), q("user_id", UUID, "Filter."), q("method", {"$ref": "#/components/schemas/PayoutMethodType"}, "Filter."),
+   q=[q("q", s(maxl=200), "Payout code (`PO-YYYY-NNNNNN`, exact or prefix), recipient email or display name."), q("status", {"$ref": "#/components/schemas/PayoutStatus"}, "Filter."), q("user_id", UUID, "Only payouts of this recipient (AM-05; used by the user-detail page)."), q("method", {"$ref": "#/components/schemas/PayoutMethodType"}, "Filter."),
       q("min_amount_micros", {"type": "integer", "minimum": 0}, "Filter."), q("max_amount_micros", {"type": "integer", "minimum": 0}, "Filter."), DFROM, DTO])
 ep("GET", "/admin/payouts/{payout_id}", "Admin finance", "Payout detail (full method details)", perm="finance.read", admin=True, resp="Payout",
    rex=dict(PAYOUT, payout_method=dict(PAYOUT["payout_method"], details={"account_name": "KEO SOPHEA", "account_number": "000124821"})),
@@ -435,7 +443,7 @@ ep("POST", "/notifications/read-all", "Notifications", "Mark all read", resp="Co
 
 # ============================ ADMIN USERS ============================
 ep("GET", "/admin/users", "Admin users", "Search users", perm="user.read", admin=True, paged=True, sort=["created_at", "email", "last_login_at"], resp="PaginatedUser", rex=page([USER]),
-   q=[QTEXT, q("role", {"$ref": "#/components/schemas/RoleName"}, "Filter."), q("status", {"$ref": "#/components/schemas/UserStatus"}, "Filter."),
+   q=[QTEXT, q("role", {"$ref": "#/components/schemas/RoleName"}, "Users holding this role (AM-05)."), q("status", {"$ref": "#/components/schemas/UserStatus"}, "Filter."),
       q("verification_status", {"$ref": "#/components/schemas/UserVerificationStatus"}, "Filter."), DFROM, DTO])
 ep("GET", "/admin/users/{user_id}", "Admin users", "User detail", perm="user.read", admin=True, resp="AdminUserDetail",
    rex={"user": USER, "profile": PROFILE, "verification": dict(VERIFICATION, status="approved"), "wallet": WALLET, "stats": {"datasets": 3, "accepted_bytes": 367001600, "tasks_approved": 0, "open_payouts": 1}, "active_sessions": 2, "suspension_reason": None})
@@ -460,7 +468,7 @@ ep("POST", "/admin/verifications/{verification_id}/decision", "Admin users", "De
 
 # ============================ ADMIN DATASETS ============================
 ep("GET", "/admin/datasets", "Admin datasets", "Search all datasets", perm="dataset.read.any", admin=True, paged=True, sort=DS_SORT + ["finalized_at", "overall_quality"], resp="PaginatedDataset", rex=page([DATASET]),
-   q=[QTEXT, q("status", {"$ref": "#/components/schemas/DatasetStatus"}, "Filter (repeatable)."), q("data_class", {"$ref": "#/components/schemas/DataClass"}, "Filter."),
+   q=[q("q", s(maxl=200), "Dataset code (`DS-YYYY-NNNNNN`, exact), title (trigram) or owner email."), q("status", {"$ref": "#/components/schemas/DatasetStatus"}, "Filter (repeatable)."), q("data_class", {"$ref": "#/components/schemas/DataClass"}, "Filter."),
       q("language", s(maxl=3), "Filter."), q("category", {"$ref": "#/components/schemas/DatasetCategory"}, "Filter."), q("min_quality", {"type": "number", "minimum": 1, "maximum": 5}, "Overall quality ≥."),
       q("owner_id", UUID, "Filter."), DFROM, DTO])
 ep("GET", "/admin/datasets/{dataset_id}", "Admin datasets", "Dataset detail (admin)", perm="dataset.read.any", admin=True, resp="AdminDatasetDetail",
@@ -473,14 +481,24 @@ ep("POST", "/admin/datasets/{dataset_id}/takedown", "Admin datasets", "Take down
 ep("POST", "/admin/files/{file_id}/rescan", "Admin datasets", "Re-run malware scan / processing", perm="dataset.read.any", admin=True, ok=202, resp="DatasetFile", rex=dict(FILE, processing_status="processing", scan_status="pending"),
    desc="Re-enqueues `processing.process_file` with `force_rescan`; used after signature updates or `scan_status=error`. Not allowed for finalized-accepted files with clean status (no-op 202).")
 
+ep("GET", "/admin/takedown-requests", "Admin datasets", "Takedown request queue", perm="user.manage", admin=True, paged=True, sort=["created_at", "updated_at", "status"], resp="PaginatedTakedownCase", rex=page([TAKEDOWN]),
+   q=[QTEXT, q("status", {"$ref": "#/components/schemas/TakedownStatus"}, "Default `received,under_review`."), q("claim_type", {"$ref": "#/components/schemas/TakedownClaimType"}, "Filter."),
+      q("source", {"$ref": "#/components/schemas/TakedownSource"}, "Filter."), q("dataset_id", UUID, "Filter."), DFROM, DTO],
+   desc="Rights/privacy complaints from `POST /public/takedown-requests`, signed-in users and admins (AM-04). `q` matches requester name/email/organisation and dataset code. Viewing requester contact data is audited.")
+ep("POST", "/admin/takedown-requests/{takedown_id}/decision", "Admin datasets", "Decide a takedown request", perm="user.manage", admin=True, step=True, body="TakedownDecision", resp="TakedownCase",
+   req={"decision": "actioned", "notes": "Publisher ownership verified; dataset removed.", "dataset_id": None, "apply_takedown": True, "takedown_reason_code": "rights_claim"},
+   rex=dict(TAKEDOWN, status="actioned", dataset_status="taken_down", decided_by=U_ADM, decided_at=T2, decision_notes="Publisher ownership verified; dataset removed.", updated_at=T2),
+   desc="Transitions (AM-04, LLD §12): `received → under_review`; `received|under_review → actioned|rejected`. `actioned` requires the linked dataset to be `taken_down` — either already, or in the same transaction via `apply_takedown=true` (same effects as `POST /admin/datasets/{id}/takedown`: review released, open annotation tasks cancelled, owner notified). `dataset_id` may (re)link the request to a dataset. The requester is emailed the outcome for `actioned`/`rejected`. Audited with before/after.",
+   val=["notes 5–5,000 chars", "takedown_reason_code required when apply_takedown=true"],
+   err=["takedown.invalid_state", "takedown.dataset_not_taken_down", "takedown.no_target", "dataset.invalid_state"])
 # ============================ EXPORTS ============================
 ep("POST", "/admin/exports", "Exports", "Create an export job", perm="dataset.export", admin=True, step=True, body="ExportCreate", ok=202, resp="ExportJob", rl="export",
    req={"filters": EXPORT["filters"], "format": "zip_originals", "include_metadata": True, "include_annotations": True, "note": "OCR training set v3"},
    rex=dict(EXPORT, status="queued", progress_percent=0, files=[], completed_at=None, started_at=None, expires_at=None, dataset_count=0, file_count=0, total_bytes=0),
-   desc="Only approved/partially_approved datasets and accepted files are exportable; taken_down excluded. Background `exports.build_export` streams objects into ZIP parts ≤ 5 GB at `exports/{job_id}/{file}.zip`. Logged with dataset ids (audit). Expires after 7 days (A-15).",
+   desc="Only approved/partially_approved datasets and accepted files are exportable; taken_down excluded. Background `exports.build_export` streams objects into ZIP parts ≤ 4 GB (4,000,000,000 bytes) at `exports/{job_id}/datahub-export-{job_id}-partNNN.zip`. The job gets a human code `EX-YYYY-NNNNNN` (AM-07). Logged with dataset ids (audit). Expires after 7 days (A-15).",
    err=["export.empty_selection"])
 ep("GET", "/admin/exports", "Exports", "List export jobs", perm="dataset.export", admin=True, paged=True, sort=["created_at"], resp="PaginatedExportJob", rex=page([EXPORT]),
-   q=[q("status", {"$ref": "#/components/schemas/ExportStatus"}, "Filter."), q("requested_by", UUID, "Filter.")])
+   q=[q("q", s(maxl=200), "Export code (`EX-YYYY-NNNNNN`) or note text."), q("status", {"$ref": "#/components/schemas/ExportStatus"}, "Filter."), q("requested_by", UUID, "Filter.")])
 ep("GET", "/admin/exports/{export_id}", "Exports", "Export job status", perm="dataset.export", admin=True, resp="ExportJob", rex=EXPORT)
 ep("POST", "/admin/exports/{export_id}/download-url", "Exports", "Presigned download for an export part", perm="dataset.export", admin=True, body="ExportDownloadRequest", resp="PresignedUrl", rl="download",
    req={"file_id": EXF}, rex={"url": "https://s3.datahub.example/datahub-private/exports/01930b7a-bbbb-7400-8000-000000000501/datahub-export-01930b7a-part-001.zip?X-Amz-Expires=300&X-Amz-Signature=…", "expires_at": "2026-10-26T09:20:00Z", "method": "GET"},
@@ -495,7 +513,7 @@ ep("GET", "/admin/analytics/overview", "Admin", "Analytics overview", perm="anal
         "finance": {"earned_micros": 1090000000, "paid_micros": 410000000}, "annotation": {"tasks_approved": 1880, "avg_review_score": 4.3},
         "review": {"median_hours_to_finalize": 19.5, "queue_depth": 14}, "series": [{"date": "2026-10-26", "uploaded_bytes": 92000000000, "accepted_bytes": 30000000000, "earned_micros": 31000000, "paid_micros": 0}]})
 ep("GET", "/admin/audit-logs", "Admin", "Audit log", perm="audit.read", admin=True, paged=True, sort=["created_at"], resp="PaginatedAuditLog", rex=page([AUDIT]),
-   q=[q("actor_id", UUID, "Filter."), q("action", s(maxl=100), "Exact or prefix (`payout.`)."), q("entity_type", s(maxl=50), "Filter."), q("entity_id", s(maxl=64), "Filter."), q("request_id", s(maxl=64), "Filter."), DFROM, DTO],
+   q=[q("actor_id", UUID, "Only rows written by this actor (AM-05)."), q("action", s(maxl=100), "Exact or prefix (`payout.`)."), q("entity_type", s(maxl=50), "Entity table/type, e.g. `dataset`, `payout_request`, `user` (AM-05)."), q("entity_id", s(maxl=64), "Entity id (UUID); combine with entity_type for an entity's history (AM-05)."), q("request_id", s(maxl=64), "Filter."), DFROM, DTO],
    desc="Read-only; audit rows are append-only (UPDATE/DELETE blocked by trigger). Viewing is itself audited.")
 ep("GET", "/admin/security-events", "Admin", "Security events", perm="audit.read", admin=True, paged=True, sort=["created_at"], resp="PaginatedSecurityEvent",
    rex=page([{"id": "01930b7d-eeee-7700-8000-000000000802", "user_id": U_CON, "email": "sophea@example.com", "event_type": "login_failed", "ip": "203.0.113.24", "user_agent": "curl/8.5", "details": {"consecutive_failures": 3}, "created_at": T}]),

@@ -80,5 +80,14 @@ def matrix():
     return "\n".join(rows)
 
 if __name__ == "__main__":
-    open("frag/authz_matrix.md", "w").write(matrix())
+    import os
+    HERE = os.path.dirname(os.path.abspath(__file__))
+    OUT = os.path.normpath(os.path.join(HERE, "..", "..", "docs", "04-backend-api"))
+    m = matrix()
+    open(os.path.join(HERE, "frag", "authz_matrix.md"), "w").write(m)
+    t = open(os.path.join(HERE, "auth_template.md")).read()
+    assert "{{MATRIX}}" in t
+    t = t.replace("{{MATRIX}}", m).replace("{{COUNT}}", str(len(EP)))
+    assert "{{" not in t
+    open(os.path.join(OUT, "AUTH_AUTHORIZATION.md"), "w").write(t)
     print(len(EP))

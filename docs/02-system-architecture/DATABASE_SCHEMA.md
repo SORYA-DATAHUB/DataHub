@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/02-system-architecture/DATABASE_SCHEMA.md` (mandatory document #12) |
-| Version | v1.0 |
+| Version | v1.1 (baseline §16 amendments AM-01, AM-02, AM-03, AM-07, AM-08, AM-09 applied) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | CTO role (data architecture) |
@@ -19,7 +19,7 @@ Define every PostgreSQL 17 table of DataHub — columns, types, nullability, def
 
 ## Scope
 
-- All 54 tables enumerated in baseline §10 (identity 11, datasets 9, review 3, finance 9, annotation 9, communication 6, operations 7). No other tables exist in v1.
+- All 54 tables enumerated in baseline §10 plus `dataset_code_counters` adopted by baseline AM-07/AM-09 — 55 tables (identity 11, datasets 9, review 3, finance 9, annotation 9, communication 6, operations 8). No other tables exist in v1.
 - Database-level integrity mechanisms: ledger triggers, zero-sum constraint trigger, partial unique indexes, the `pricing_rules` exclusion constraint, audit-log immutability.
 - Enum strategy, identifier strategy, timestamp strategy, soft-delete/anonymisation strategy, retention rules, Alembic migration strategy and migration tests.
 - Out of scope: query-level design (see `LLD.md`), object-storage layout (see `docs/04-backend-api/FILE_UPLOAD_STORAGE_SPEC.md`), backup procedure (see `docs/07-deployment-operations/BACKUP_DR_PLAN.md`).
@@ -47,15 +47,15 @@ Define every PostgreSQL 17 table of DataHub — columns, types, nullability, def
 | D-DB-05 | Ledger tables (`ledger_journals`, `wallet_transactions`) are append-only, enforced by triggers; `audit_logs` is append-only except for a guarded retention purge. | Baseline §8.5 and §9. |
 | D-DB-06 | `wallets` holds cached per-bucket balances **for user wallets only**; system wallets keep no cached balance (computed from lines). | Avoids a hot row lock on system wallets that every journal would otherwise contend on; user wallets must be locked anyway (§8.5 concurrency rule). |
 | D-DB-07 | `updated_at` is maintained by the application (SQLAlchemy `onupdate=func.now()`), not by triggers. | Keeps trigger surface limited to integrity rules; bulk SQL updates in services must set `updated_at` explicitly (lint rule in code review checklist). |
-| D-DB-08 | Content-hash duplicate payment is prevented at the database level by two partial unique indexes on `earning_records.sha256` (first payment, labeled upgrade) in addition to service-level advisory locks. | "Do not allow the same approval action to credit a contributor twice" must hold even under concurrent finalisation of two datasets containing the same file. |
+| D-DB-08 | Content-hash duplicate payment is prevented at the database level by the partial unique index `uq_earning_records_content_tier_paid` on `earning_records (content_sha256, pricing_tier) WHERE amount_micros > 0` (baseline AM-03) in addition to the service-level `pg_advisory_xact_lock(hashtext(content_sha256))` taken per file in sorted order at finalize. | "Do not allow the same approval action to credit a contributor twice" must hold even under concurrent finalisation of two datasets containing the same file. |
 | D-DB-09 | Free-text search uses `pg_trgm` GIN indexes (not `tsvector`). | Khmer has no inter-word spaces; trigram matching works on character sequences for both Khmer and English without a Khmer text-search dictionary. |
 | D-DB-10 | Sensitive secrets stored in the database (TOTP secrets, one-time email link context) are encrypted at application level (`cryptography` MultiFernet, key from `FIELD_ENCRYPTION_KEYS`) and stored as `bytea`. Tokens (sessions, email links, recovery codes) are stored only as SHA-256 hashes. | A database dump alone never yields a usable credential. |
 
 ## Dependencies
 
-- `docs/ENGINEERING_BASELINE.md` v1.0 (§6 roles, §7 formats, §8 money, §9 state machines, §10 tables, §11 annotation, §13 jobs).
+- `docs/ENGINEERING_BASELINE.md` v1.1 incl. §16 amendments (§6 roles, §7 formats, §8 money, §9 state machines, §10 tables, §11 annotation, §13 jobs).
 - `docs/_source/MASTER_PROMPT.md` Part 7 (database implementation), Parts 9–14.
-- `ERD.md` v1.0 and `LLD.md` v1.0 (same baseline date) — must stay consistent with this document.
+- `ERD.md` v1.1 and `LLD.md` v1.1 (same baseline date) — must stay consistent with this document.
 - PostgreSQL 17 with extensions `citext`, `btree_gist`, `pg_trgm`; SQLAlchemy 2.0; Alembic.
 
 ## Acceptance criteria
@@ -201,6 +201,7 @@ Helper trigger functions (`dh_forbid_mutation`, `dh_ledger_check_journal_balance
 | 52 | Operations | `background_job_records` | core | mutable | succeeded 30 d, failed/dead 180 d |
 | 53 | Operations | `takedown_requests` | admin | state machine | 7 y |
 | 54 | Operations | `deletion_requests` | identity | state machine | 7 y |
+| 55 | Operations | `dataset_code_counters` | core (used by datasets, finance, exports) | counter rows (upsert) | permanent (AM-07) |
 
 ---
 
@@ -238,7 +239,7 @@ Helper trigger functions (`dh_forbid_mutation`, `dh_ledger_check_journal_balance
 | `ck_wallets_kind_enum` | `wallets.kind` | `user`, `system` |
 | `ck_wallets_system_code_enum` | `wallets.system_code` (`varchar(64)`) | `system_dataset_purchases`, `system_annotation_labor`, `system_adjustments`, `system_payouts_settled` |
 | `ck_ledger_journals_kind_enum` | `ledger_journals.kind` | `dataset_earning`, `annotation_reward`, `earning_release`, `payout_reserve`, `payout_release`, `payout_settle`, `payout_reversal`, `adjustment_credit`, `adjustment_debit` |
-| `ck_ledger_journals_source_type_enum` | `ledger_journals.source_type` | `dataset_review`, `annotation_review`, `payout_request`, `payout_adjustment` |
+| `ck_ledger_journals_source_type_enum` | `ledger_journals.source_type` | `dataset_review`, `annotation_review`, `earning_record`, `payout_request`, `payout_adjustment` |
 | `ck_wallet_transactions_bucket_enum` | `wallet_transactions.bucket` | `pending`, `available`, `reserved`, `paid`, `main` |
 | `ck_earning_records_source_type_enum` | `earning_records.source_type` | `dataset_review`, `annotation_review` |
 | `ck_earning_records_zero_reason_enum` | `earning_records.zero_reason` | `already_paid`, `duplicate_in_submission`, `rounding`, `zero_rate` |
@@ -255,6 +256,9 @@ Helper trigger functions (`dh_forbid_mutation`, `dh_ledger_check_journal_balance
 | `ck_annotation_versions_kind_enum` | `annotation_versions.kind` | `draft`, `submitted` |
 | `ck_annotation_reviews_status_enum` | `annotation_reviews.status` | `in_progress`, `completed`, `cancelled` |
 | `ck_annotation_reviews_decision_enum` | `annotation_reviews.decision` | `approve`, `request_changes` |
+| `ck_annotation_reviews_review_kind_enum` | `annotation_reviews.review_kind` | `primary`, `qa` (AM-09) |
+| `ck_dataset_code_counters_prefix_enum` | `dataset_code_counters.prefix` | `DS`, `PO`, `EX` (AM-07) |
+| `ck_earning_records_pricing_tier_enum` | `earning_records.pricing_tier` | `raw`, `labeled`, `labeled_upgrade` (AM-03) |
 | `ck_annotation_feedback_severity_enum` | `annotation_feedback.severity` | `info`, `minor`, `major`, `critical` |
 | `ck_conversations_kind_enum` | `conversations.kind` | `support`, `dataset`, `payout`, `annotation_task` |
 | `ck_conversations_status_enum` | `conversations.status` | `open`, `awaiting_user`, `closed` |
@@ -297,7 +301,9 @@ Account root. Never hard-deleted (D-DB-03). Retention: row permanent; PII anonym
 | `mfa_secret_encrypted` | bytea | Y | — | MultiFernet ciphertext of base32 TOTP secret (D-DB-10); also holds the pending secret during setup |
 | `mfa_enabled_at` | timestamptz | Y | — | |
 | `failed_login_count` | integer | N | `0` | CHECK `ck_users_failed_login_count_nonneg`: `>= 0`; reset on success |
-| `locked_until` | timestamptz | Y | — | temporary lockout after 10 consecutive failures (15 min) |
+| `locked_until` | timestamptz | Y | — | temporary lockout: 5 failed logins within 15 min → locked 15 min (baseline AM-08) |
+| `legal_hold` | boolean | N | `false` | AM-09: blocks anonymisation/deletion and retention purges of this user's data while true |
+| `legal_hold_reason` | text | Y | — | CHECK `ck_users_legal_hold_reason`: `NOT legal_hold OR legal_hold_reason IS NOT NULL` |
 | `last_login_at` | timestamptz | Y | — | |
 | `password_changed_at` | timestamptz | Y | — | |
 | `suspended_at` | timestamptz | Y | — | |
@@ -326,6 +332,7 @@ Relationships: 1–1 `user_profiles`; 1–N `user_roles`, `user_sessions`, `emai
 | `organization` | varchar(200) | Y | — | |
 | `preferred_locale` | varchar(10) | N | `'en'` | CHECK `ck_user_profiles_preferred_locale_enum`: `IN ('en','km')` |
 | `timezone` | varchar(64) | Y | — | IANA name; validated against `zoneinfo.available_timezones()` |
+| `privacy_trained` | boolean | N | `false` | AM-09: set by an admin when the user completed personal-data handling training; required before annotators/reviewers are assigned datasets with `contains_personal_data` (DATA_PRIVACY_OWNERSHIP.md) |
 | `notification_preferences` | jsonb | N | `'{}'::jsonb` | `{"<notification type>": {"email": bool}}`; in-app notifications are always on; absent key = default from `messaging.NOTIFICATION_DEFAULTS` |
 | `created_at` | timestamptz | N | `now()` | |
 | `updated_at` | timestamptz | N | `now()` | |
@@ -505,6 +512,7 @@ Contributor submission container. State machine: baseline §9 / `LLD.md` §5.4. 
 | Column | Type | Null | Default | Constraints / notes |
 |---|---|---|---|---|
 | `id` | uuid | N | — | PK |
+| `code` | varchar(20) | N | — | human reference `DS-YYYY-NNNNNN` (baseline AM-07), allocated from `dataset_code_counters` (prefix `DS`) in the inserting transaction; `uq_datasets_code` UNIQUE; CHECK `ck_datasets_code_format`: `code ~ '^DS-[0-9]{4}-[0-9]{6}$'`; immutable |
 | `owner_id` | uuid | N | — | FK → `users(id)` [R] |
 | `title` | varchar(200) | N | — | CHECK `ck_datasets_title_length`: `char_length(btrim(title)) BETWEEN 3 AND 200` |
 | `description` | text | N | `''` | CHECK `ck_datasets_description_length`: `char_length(description) <= 10000` |
@@ -530,11 +538,13 @@ Contributor submission container. State machine: baseline §9 / `LLD.md` §5.4. 
 | `taken_down_by` | uuid | Y | — | FK → `users(id)` [R] |
 | `takedown_reason` | text | Y | — | CHECK `ck_datasets_takedown_fields`: `status <> 'taken_down' OR (taken_down_at IS NOT NULL AND takedown_reason IS NOT NULL)` |
 | `objects_purged_at` | timestamptz | Y | — | storage objects deleted by retention |
+| `legal_hold` | boolean | N | `false` | AM-09: while true, retention purge, owner deletion and takedown secure-deletion of this dataset's objects are suspended |
+| `legal_hold_reason` | text | Y | — | CHECK `ck_datasets_legal_hold_reason`: `NOT legal_hold OR legal_hold_reason IS NOT NULL` |
 | `lock_version` | integer | N | `1` | optimistic lock for `PATCH /datasets/{id}` |
 | `created_at` | timestamptz | N | `now()` | |
 | `updated_at` | timestamptz | N | `now()` | |
 
-Indexes: `ix_datasets_owner_id_created_at (owner_id, created_at DESC)`; `ix_datasets_status_submitted_at (status, submitted_at)` (review queue: `status='submitted'` oldest first); `ix_datasets_category (category)`; `ix_datasets_primary_language (primary_language)`; `ix_datasets_data_class (data_class)`; `ix_datasets_quality_score (quality_score) WHERE quality_score IS NOT NULL`; `ix_datasets_tags` GIN (`tags`); `ix_datasets_languages` GIN (`languages`); `ix_datasets_title_trgm` GIN (`title gin_trgm_ops`); `ix_datasets_taken_down_by (taken_down_by)`.
+Indexes: `ix_datasets_owner_id_created_at (owner_id, created_at DESC)`; `ix_datasets_status_submitted_at (status, submitted_at)` (review queue: `status='submitted'` oldest first); `ix_datasets_category (category)`; `ix_datasets_primary_language (primary_language)`; `ix_datasets_data_class (data_class)`; `ix_datasets_quality_score (quality_score) WHERE quality_score IS NOT NULL`; `ix_datasets_tags` GIN (`tags`); `ix_datasets_languages` GIN (`languages`); `ix_datasets_title_trgm` GIN (`title gin_trgm_ops`); `ix_datasets_taken_down_by (taken_down_by)`; `uq_datasets_code` UNIQUE (`code`) (exact-code search); `ix_datasets_legal_hold (id) WHERE legal_hold`.
 
 #### 4.2.2 `dataset_versions`
 
@@ -876,7 +886,7 @@ Journal header (baseline: "spec's transaction header"). Append-only (`trg_ledger
 |---|---|---|---|---|
 | `id` | uuid | N | — | PK |
 | `kind` | varchar(32) | N | — | `ck_ledger_journals_kind_enum` |
-| `idempotency_key` | varchar(200) | N | — | `uq_ledger_journals_idempotency_key` UNIQUE; formats in baseline §8.5 plus `dataset_review:{review_id}:release` for `earning_release` |
+| `idempotency_key` | varchar(200) | N | — | `uq_ledger_journals_idempotency_key` UNIQUE; formats in baseline §8.5 plus `earning_release:{earning_record_id}` for `earning_release` (baseline AM-02; one release journal per held earning record) |
 | `source_type` | varchar(32) | N | — | `ck_ledger_journals_source_type_enum` |
 | `source_id` | uuid | N | — | id of the source row (polymorphic, not FK-enforced; integrity guaranteed by typed FKs on the source side, e.g. `dataset_reviews.ledger_journal_id`) |
 | `user_id` | uuid | N | — | FK → `users(id)` [R]; beneficiary (every v1 journal touches exactly one user wallet) |
@@ -887,7 +897,7 @@ Journal header (baseline: "spec's transaction header"). Append-only (`trg_ledger
 | `request_id` | varchar(64) | Y | — | correlation with `audit_logs.request_id` |
 | `created_at` | timestamptz | N | `now()` | |
 
-Checks: `ck_ledger_journals_kind_source`: `(kind = 'dataset_earning' AND source_type = 'dataset_review') OR (kind = 'earning_release' AND source_type = 'dataset_review') OR (kind = 'annotation_reward' AND source_type = 'annotation_review') OR (kind IN ('payout_reserve','payout_release','payout_settle','payout_reversal') AND source_type = 'payout_request') OR (kind IN ('adjustment_credit','adjustment_debit') AND source_type = 'payout_adjustment')`.
+Checks: `ck_ledger_journals_kind_source`: `(kind = 'dataset_earning' AND source_type = 'dataset_review') OR (kind = 'earning_release' AND source_type = 'earning_record') OR (kind = 'annotation_reward' AND source_type = 'annotation_review') OR (kind IN ('payout_reserve','payout_release','payout_settle','payout_reversal') AND source_type = 'payout_request') OR (kind IN ('adjustment_credit','adjustment_debit') AND source_type = 'payout_adjustment')`.
 Indexes: `ix_ledger_journals_source_type_source_id (source_type, source_id)`; `ix_ledger_journals_user_id_created_at (user_id, created_at DESC)`; `ix_ledger_journals_kind_created_at (kind, created_at DESC)`; `ix_ledger_journals_created_by`; `ix_ledger_journals_created_at_brin` BRIN (`created_at`).
 
 #### 4.4.4 `wallet_transactions`
@@ -909,7 +919,7 @@ Indexes: `uq_wallet_transactions_journal_id_line_no` UNIQUE `(journal_id, line_n
 
 #### 4.4.5 `earning_records`
 
-Per-file (dataset) or per-task (annotation) earning evidence, including zero-amount outcomes, with the rates in force at finalization (baseline §8.4). Append-only except the release columns (`released_at`, `release_journal_id`) written once by `finance.release_pending`.
+Per-file (dataset) or per-task (annotation) earning evidence, including zero-amount outcomes, with the rates in force at finalization (baseline §8.4). Append-only except the release columns (`released_at`, `release_journal_id`) written once by `finance.release_pending`. Dataset earnings and annotation rewards follow the same hold rule (AM-02): with `earning_hold_days > 0` both credit `pending` and set `hold_until`.
 
 | Column | Type | Null | Default | Constraints / notes |
 |---|---|---|---|---|
@@ -922,13 +932,13 @@ Per-file (dataset) or per-task (annotation) earning evidence, including zero-amo
 | `dataset_id` | uuid | Y | — | FK → `datasets(id)` [R] |
 | `file_id` | uuid | Y | — | FK → `dataset_files(id)` [R]; NULL for annotation rewards |
 | `annotation_task_id` | uuid | Y | — | FK → `annotation_tasks(id)` [R] (added in revision 0006) |
-| `sha256` | bytea | Y | — | copy of file hash; CHECK `octet_length = 32` when not NULL |
+| `content_sha256` | char(64) | Y | — | AM-03: lower-case hex SHA-256 of the file content (`encode(dataset_files.sha256, 'hex')`); CHECK `ck_earning_records_content_sha256_format`: `content_sha256 ~ '^[0-9a-f]{64}$'`; NULL for annotation rewards |
+| `pricing_tier` | varchar(32) | Y | — | AM-03: `ck_earning_records_pricing_tier_enum` — `raw`, `labeled` (base payment at that class's rate) or `labeled_upgrade` (differential, §8.4); NULL for annotation rewards |
 | `data_class` | varchar(32) | Y | — | final class applied |
 | `accepted_bytes` | bigint | Y | — | CHECK `>= 0` |
 | `pricing_rule_id` | uuid | Y | — | FK → `pricing_rules(id)` [R] |
 | `rate_micros_per_gb` | bigint | Y | — | rate copied from rule; CHECK `> 0` |
 | `previously_paid_rate_micros_per_gb` | bigint | Y | — | for labeled upgrade: rate of the earlier base payment |
-| `is_labeled_upgrade` | boolean | N | `false` | |
 | `amount_micros` | bigint | N | — | CHECK `ck_earning_records_amount_nonneg`: `>= 0` |
 | `zero_reason` | varchar(32) | Y | — | `ck_earning_records_zero_reason_enum`; CHECK `ck_earning_records_zero_reason_iff_zero`: `(amount_micros = 0) = (zero_reason IS NOT NULL)` |
 | `journal_id` | uuid | Y | — | FK → `ledger_journals(id)` [R]; credit journal; CHECK `ck_earning_records_journal_when_positive`: `amount_micros = 0 OR journal_id IS NOT NULL` |
@@ -939,12 +949,12 @@ Per-file (dataset) or per-task (annotation) earning evidence, including zero-amo
 | `created_at` | timestamptz | N | `now()` | |
 | `updated_at` | timestamptz | N | `now()` | |
 
-Checks: `ck_earning_records_source_fk`: `(source_type = 'dataset_review' AND dataset_review_id = source_id AND file_id IS NOT NULL AND sha256 IS NOT NULL AND accepted_bytes IS NOT NULL) OR (source_type = 'annotation_review' AND annotation_review_id = source_id AND annotation_task_id IS NOT NULL AND file_id IS NULL)`; `ck_earning_records_upgrade_rate`: `NOT is_labeled_upgrade OR previously_paid_rate_micros_per_gb IS NOT NULL`; `ck_earning_records_pending_hold`: `credited_bucket IS DISTINCT FROM 'pending' OR hold_until IS NOT NULL`.
+Checks: `ck_earning_records_source_fk`: `(source_type = 'dataset_review' AND dataset_review_id = source_id AND file_id IS NOT NULL AND content_sha256 IS NOT NULL AND pricing_tier IS NOT NULL AND accepted_bytes IS NOT NULL) OR (source_type = 'annotation_review' AND annotation_review_id = source_id AND annotation_task_id IS NOT NULL AND file_id IS NULL AND content_sha256 IS NULL AND pricing_tier IS NULL)`; `ck_earning_records_upgrade_rate`: `pricing_tier IS DISTINCT FROM 'labeled_upgrade' OR previously_paid_rate_micros_per_gb IS NOT NULL`; `ck_earning_records_pending_hold`: `credited_bucket IS DISTINCT FROM 'pending' OR hold_until IS NOT NULL`.
 
 Indexes:
 - `uq_earning_records_source_type_source_id_file_id` UNIQUE `(source_type, source_id, file_id) NULLS NOT DISTINCT` (baseline §10; NULLS NOT DISTINCT makes the annotation case — `file_id` NULL — unique per review).
-- `uq_earning_records_sha256_base_payment` UNIQUE `(sha256) WHERE source_type = 'dataset_review' AND amount_micros > 0 AND NOT is_labeled_upgrade` (D-DB-08: content is paid at most once at base rate).
-- `uq_earning_records_sha256_upgrade_payment` UNIQUE `(sha256) WHERE amount_micros > 0 AND is_labeled_upgrade` (at most one labeled upgrade per content).
+- `uq_earning_records_content_tier_paid` UNIQUE `(content_sha256, pricing_tier) WHERE amount_micros > 0` (baseline AM-03, D-DB-08: at most one positive payment per content hash and tier; the stricter rule — any earlier positive payment makes later ones 0 except one labeled upgrade — is enforced by the finalize service under `pg_advisory_xact_lock(hashtext(content_sha256))`).
+- `ix_earning_records_content_sha256 (content_sha256) WHERE amount_micros > 0` (eligibility look-up of earlier payments).
 - `ix_earning_records_user_id_created_at (user_id, created_at DESC)`; `ix_earning_records_release_due (hold_until) WHERE credited_bucket = 'pending' AND released_at IS NULL`; `ix_earning_records_dataset_id`; `ix_earning_records_file_id`; `ix_earning_records_journal_id`; plus FK indexes on `dataset_review_id`, `annotation_review_id`, `annotation_task_id`, `pricing_rule_id`, `release_journal_id`.
 
 #### 4.4.6 `payout_requests`
@@ -954,6 +964,7 @@ Withdrawal requests (baseline §8.7, state machine §9).
 | Column | Type | Null | Default | Constraints / notes |
 |---|---|---|---|---|
 | `id` | uuid | N | — | PK |
+| `code` | varchar(20) | N | — | human reference `PO-YYYY-NNNNNN` (baseline AM-07), allocated from `dataset_code_counters` (prefix `PO`) in the inserting transaction; `uq_payout_requests_code` UNIQUE; CHECK `ck_payout_requests_code_format`: `code ~ '^PO-[0-9]{4}-[0-9]{6}$'`; immutable |
 | `user_id` | uuid | N | — | FK → `users(id)` [R] |
 | `wallet_id` | uuid | N | — | FK → `wallets(id)` [R] |
 | `payout_method_id` | uuid | N | — | FK → `payout_methods(id)` [R] |
@@ -1201,7 +1212,8 @@ Indexes: `uq_annotation_versions_annotation_id_version_no` UNIQUE `(annotation_i
 | `annotator_id` | uuid | N | — | FK → `users(id)` [R]; author of the reviewed version (reward beneficiary) |
 | `reviewer_id` | uuid | N | — | FK → `users(id)` [R]; CHECK `ck_annotation_reviews_not_self`: `reviewer_id <> annotator_id` |
 | `review_round` | integer | N | — | |
-| `status` | varchar(32) | N | `'in_progress'` | `ck_annotation_reviews_status_enum` |
+| `review_kind` | varchar(32) | N | `'primary'` | `ck_annotation_reviews_review_kind_enum` (AM-09): `primary` = the mandatory review that decides the task and triggers the reward; `qa` = sampled second review (rate `annotation_qa_sample_rate`) that scores quality but never changes task status or rewards |
+| `status` | varchar(32) | N | `'in_progress'` | `ck_annotation_reviews_status_enum`; `cancelled` when the task is cancelled/reassigned or the claim is released (AM-09) |
 | `decision` | varchar(32) | Y | — | `ck_annotation_reviews_decision_enum`; CHECK `(status = 'completed') = (decision IS NOT NULL)` |
 | `score` | smallint | Y | — | CHECK `score IS NULL OR score BETWEEN 1 AND 5`; required when completed (`ck_annotation_reviews_score_when_completed`: `status <> 'completed' OR score IS NOT NULL`) |
 | `comments` | text | Y | — | required for `request_changes` (CHECK `decision IS DISTINCT FROM 'request_changes' OR comments IS NOT NULL`) |
@@ -1210,7 +1222,7 @@ Indexes: `uq_annotation_versions_annotation_id_version_no` UNIQUE `(annotation_i
 | `created_at` | timestamptz | N | `now()` | |
 | `updated_at` | timestamptz | N | `now()` | |
 
-Indexes: `uq_annotation_reviews_one_active` UNIQUE `(task_id) WHERE status = 'in_progress'`; `uq_annotation_reviews_task_id_review_round` UNIQUE `(task_id, review_round)`; `ix_annotation_reviews_reviewer_id_status (reviewer_id, status)`; FK indexes.
+Indexes: `uq_annotation_reviews_one_active` UNIQUE `(task_id, review_kind) WHERE status = 'in_progress'`; `uq_annotation_reviews_task_id_review_round` UNIQUE `(task_id, review_round)`; `ix_annotation_reviews_reviewer_id_status (reviewer_id, status)`; FK indexes.
 
 #### 4.5.8 `annotation_feedback`
 
@@ -1423,6 +1435,7 @@ Admin export jobs (Part 14). Retention: row kept 1 year (who exported what); obj
 | Column | Type | Null | Default | Constraints / notes |
 |---|---|---|---|---|
 | `id` | uuid | N | — | PK |
+| `code` | varchar(20) | N | — | human reference `EX-YYYY-NNNNNN` (baseline AM-07), allocated from `dataset_code_counters` (prefix `EX`) in the inserting transaction; `uq_export_jobs_code` UNIQUE; CHECK `ck_export_jobs_code_format`: `code ~ '^EX-[0-9]{4}-[0-9]{6}$'`; immutable |
 | `requested_by` | uuid | N | — | FK → `users(id)` [R] |
 | `status` | varchar(32) | N | `'queued'` | `ck_export_jobs_status_enum` |
 | `filters` | jsonb | N | — | `{dataset_ids?, categories?, languages?, min_quality?, data_class?, statuses:['approved','partially_approved'], date_from?, date_to?}` |
@@ -1485,7 +1498,7 @@ Business-tunable settings (secrets never stored here — they live in environmen
 | `created_at` | timestamptz | N | `now()` | |
 | `updated_at` | timestamptz | N | `now()` | |
 
-Seeded keys (revision 0001; finance keys in 0005): `earning_hold_days`=0, `min_withdrawal_micros`=10000000, `max_withdrawal_micros`=5000000000, `payout_dual_approval_threshold_micros`=100000000, `labeled_upgrade_enabled`=true, `max_file_bytes`=5000000000, `max_dataset_bytes`=50000000000, `user_pending_quota_bytes`=200000000000, `max_files_per_dataset`=2000, `upload_session_ttl_hours`=24, `extra_allowed_extensions`=[], `dataset_categories`=["books","newspapers","government_documents","academic","forms","receipts_invoices","handwriting","religious_texts","web_text","legal","medical","other"], `export_retention_days`=7, `rejected_object_retention_days`=90, `withdrawn_draft_retention_days`=30, `annotation_draft_versions_keep`=50, `registration_open`=true, `maintenance_banner`="", `clamd_max_scan_bytes`=4000000000.
+Seeded keys (revision 0001; finance keys in 0005): `earning_hold_days`=0, `min_withdrawal_micros`=10000000, `max_withdrawal_micros`=5000000000, `payout_dual_approval_threshold_micros`=100000000, `labeled_upgrade_enabled`=true, `max_file_bytes`=4000000000 (AM-01; validator refuses > 4,000,000,000), `max_dataset_bytes`=50000000000, `user_pending_quota_bytes`=200000000000, `max_files_per_dataset`=2000, `upload_session_ttl_hours`=24, `extra_allowed_extensions`=[], `dataset_categories`=["books","newspapers","government_documents","academic","forms","receipts_invoices","handwriting","religious_texts","web_text","legal","medical","other"], `export_retention_days`=7, `rejected_object_retention_days`=90, `withdrawn_draft_retention_days`=30, `annotation_draft_versions_keep`=50, `registration_open`=true, `maintenance_banner`="", `maintenance_mode`=false (AM-06), `review_max_active_claims`=5, `annotation_qa_sample_rate`=0.10 (value_type `json` number; validator 0–1), `legal_docs_approved`=false (AM-09; must be true before public launch, HA-01).
 
 #### 4.7.5 `background_job_records`
 
@@ -1562,6 +1575,19 @@ Account deletion requests (`POST /me/deletion-request`). Retention: 7 years (evi
 
 Indexes: `uq_deletion_requests_one_open` UNIQUE `(user_id) WHERE status IN ('requested','processing')`; `ix_deletion_requests_due (scheduled_for) WHERE status = 'requested'`.
 
+#### 4.7.8 `dataset_code_counters`
+
+Per-prefix, per-year sequence for human reference codes (baseline AM-07): `DS-YYYY-NNNNNN` (datasets), `PO-YYYY-NNNNNN` (payout requests), `EX-YYYY-NNNNNN` (export jobs). The table keeps its baseline name although it serves all three prefixes. Retention: permanent.
+
+| Column | Type | Null | Default | Constraints / notes |
+|---|---|---|---|---|
+| `prefix` | varchar(2) | N | — | `ck_dataset_code_counters_prefix_enum` (`DS`, `PO`, `EX`) |
+| `year` | smallint | N | — | UTC calendar year of the insert; CHECK `year BETWEEN 2024 AND 9999` |
+| `last_value` | integer | N | — | last number issued; CHECK `last_value BETWEEN 1 AND 999999` (overflow → error, alert; widen format by migration) |
+| `updated_at` | timestamptz | N | `now()` | |
+
+PK `pk_dataset_code_counters (prefix, year)`. Allocation (in the same transaction as the row that receives the code): `INSERT INTO dataset_code_counters (prefix, year, last_value) VALUES (:p, :y, 1) ON CONFLICT (prefix, year) DO UPDATE SET last_value = dataset_code_counters.last_value + 1, updated_at = now() RETURNING last_value` → `format('%s-%s-%s', prefix, year, lpad(last_value::text, 6, '0'))`. The row lock serialises concurrent inserts of the same prefix only for the remainder of that short transaction; a rolled-back transaction also rolls back the counter, so codes are gap-free in practice (gaps are harmless). Codes are display/search identifiers only — URLs and FKs use the UUID.
+
 ---
 
 ## 5. Baseline key constraints — traceability
@@ -1587,7 +1613,7 @@ Indexes: `uq_deletion_requests_one_open` UNIQUE `(user_id) WHERE status IN ('req
 | CHECK on cached balances (§8.5) | `ck_wallets_*_nonneg` |
 | payout whole cents (§8.7) | `ck_payout_requests_amount_whole_cents` |
 
-Additional partial unique indexes introduced here: `uq_contributor_verifications_one_pending`, `uq_payout_methods_one_default`, `uq_upload_sessions_resume`, `uq_dataset_licenses_one_active`, `uq_dataset_reviews_one_active`, `uq_dataset_reviews_one_finalized_per_version`, `uq_earning_records_sha256_base_payment`, `uq_earning_records_sha256_upgrade_payment`, `uq_annotation_reviews_one_active`, `uq_messages_conversation_id_sender_id_client_message_id`, `uq_notifications_user_id_dedupe_key`, `uq_email_outbox_dedupe_key`, `uq_background_job_records_inflight`, `uq_deletion_requests_one_open`, `uq_agreement_acceptances_account_level`, `uq_agreement_acceptances_dataset_level`.
+Additional partial unique indexes introduced here: `uq_contributor_verifications_one_pending`, `uq_payout_methods_one_default`, `uq_upload_sessions_resume`, `uq_dataset_licenses_one_active`, `uq_dataset_reviews_one_active`, `uq_dataset_reviews_one_finalized_per_version`, `uq_earning_records_content_tier_paid` (AM-03), `uq_datasets_code`, `uq_payout_requests_code`, `uq_export_jobs_code` (AM-07), `uq_annotation_reviews_one_active`, `uq_messages_conversation_id_sender_id_client_message_id`, `uq_notifications_user_id_dedupe_key`, `uq_email_outbox_dedupe_key`, `uq_background_job_records_inflight`, `uq_deletion_requests_one_open`, `uq_agreement_acceptances_account_level`, `uq_agreement_acceptances_dataset_level`.
 
 ---
 
@@ -1789,6 +1815,8 @@ Executed by `identity.service.anonymize_user(db, user_id, actor)` in one transac
 
 ### 7.3 Retention matrix (executed by `retention.purge`, beat daily 02:30 UTC)
 
+Legal hold (AM-09): rows/objects belonging to a dataset with `datasets.legal_hold = true` or a user with `users.legal_hold = true` are skipped by every purge rule below and by anonymisation (§7.2, recorded as blocker `legal_hold`) until the hold is released (audited).
+
 | Data | Rule | Action |
 |---|---|---|
 | `upload_sessions` open past `expires_at` | 24 h (A-15) | `uploads.expire_sessions` (every 15 min): abort S3 multipart, status `expired`, delete `pending_upload` file row |
@@ -1839,7 +1867,7 @@ During the initial build (Phases A–H of the master prompt) each phase contribu
 
 | Rev | Phase | Contents |
 |---|---|---|
-| `0001_a_foundation` | A | extensions (§1.4); functions `dh_forbid_mutation`, `dh_audit_logs_guard`; tables `system_settings` (+ seed), `audit_logs` (+ guard trigger), `background_job_records` |
+| `0001_a_foundation` | A | extensions (§1.4); functions `dh_forbid_mutation`, `dh_audit_logs_guard`; tables `system_settings` (+ seed), `audit_logs` (+ guard trigger), `background_job_records`, `dataset_code_counters` (AM-07) |
 | `0002_b_identity` | B | `users`, `user_profiles`, `roles` (+ seed of 5 roles & permissions), `user_roles`, `user_sessions`, `email_verifications`, `payout_methods`, `contributor_verifications`, `agreement_acceptances` (without `dataset_id`), `security_events`, `mfa_recovery_codes`, `deletion_requests`, `notifications`, `email_outbox` |
 | `0003_c_datasets` | C | `datasets`, `dataset_versions`, `dataset_files`, `dataset_metadata`, `upload_sessions`, `upload_parts`, `dataset_licenses`, `dataset_duplicates`, `file_previews`; adds `agreement_acceptances.dataset_id` + its partial unique indexes |
 | `0004_d_review` | D | `dataset_reviews` (without `pricing_rule_id`, `ledger_journal_id`), `dataset_file_reviews`, `dataset_quality_scores`, `takedown_requests` |

@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Document | `docs/02-system-architecture/ERD.md` (mandatory document #11) |
-| Version | v1.0 |
+| Version | v1.1 (baseline §16 AM-03, AM-07, AM-09 applied) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | CTO role (data architecture) |
-| Canonical source | `docs/ENGINEERING_BASELINE.md` §10; column-level contract in `DATABASE_SCHEMA.md` v1.0 |
+| Canonical source | `docs/ENGINEERING_BASELINE.md` §10; column-level contract in `DATABASE_SCHEMA.md` v1.1 |
 | Change control | Diagrams are regenerated from `DATABASE_SCHEMA.md` whenever a table or FK changes; both documents change in the same pull request. |
 
 ## Purpose
@@ -18,9 +18,9 @@ Give a complete, visual model of every DataHub database entity and every foreign
 
 ## Scope
 
-- All 54 tables of baseline §10: identity (11), datasets (9), review (3), finance (9), annotation (9), communication (6), operations (7).
+- All 55 tables: the 54 of baseline §10 plus `dataset_code_counters` (baseline AM-07/AM-09): identity (11), datasets (9), review (3), finance (9), annotation (9), communication (6), operations (8).
 - Domain diagrams show **every column** (type, PK/FK/UK markers) of the domain's tables and every FK relationship originating in that domain; tables owned by other domains appear as stubs (primary key only).
-- The overview diagram shows all 54 entities (primary keys only) and all structural relationships; actor references (`*_by` columns and `audit_logs.actor_id`, all pointing to `users`) are omitted there for legibility but appear in the domain diagrams.
+- The overview diagram shows all 55 entities (primary keys only) and all structural relationships; actor references (`*_by` columns and `audit_logs.actor_id`, all pointing to `users`) are omitted there for legibility but appear in the domain diagrams.
 - Constraints other than PK/FK/unique (CHECKs, partial unique indexes, exclusion constraint, triggers) are specified in `DATABASE_SCHEMA.md` §4–§6, not drawn here.
 
 ## Assumptions
@@ -42,13 +42,13 @@ Give a complete, visual model of every DataHub database entity and every foreign
 
 ## Dependencies
 
-- `docs/ENGINEERING_BASELINE.md` v1.0 §8.5 (ledger), §10 (tables and key constraints).
-- `DATABASE_SCHEMA.md` v1.0 (authoritative columns, types and constraints).
-- `LLD.md` v1.0 (module ownership of tables).
+- `docs/ENGINEERING_BASELINE.md` v1.1 §8.5 (ledger), §10 (tables and key constraints).
+- `DATABASE_SCHEMA.md` v1.1 (authoritative columns, types and constraints).
+- `LLD.md` v1.1 (module ownership of tables).
 
 ## Acceptance criteria
 
-1. Each of the 54 tables in baseline §10 appears with all of its columns in exactly one domain diagram and as an entity in the overview diagram.
+1. Each of the 55 tables (baseline §10 + AM-09 `dataset_code_counters`) appears with all of its columns in exactly one domain diagram and as an entity in the overview diagram.
 2. Every column marked `FK` in `DATABASE_SCHEMA.md` has a relationship line in its domain diagram.
 3. All eight Mermaid blocks render without syntax errors.
 4. No entity, column or relationship appears here that is absent from `DATABASE_SCHEMA.md`.
@@ -65,7 +65,7 @@ Give a complete, visual model of every DataHub database entity and every foreign
 | Finance | `finance` | `pricing_rules`, `wallets`, `ledger_journals`, `wallet_transactions`, `earning_records`, `payout_requests`, `payout_approvals`, `payout_records`, `payout_adjustments` |
 | Annotation | `annotation` | `annotation_projects`, `annotation_project_datasets`, `annotation_tasks`, `annotation_assignments`, `annotations`, `annotation_versions`, `annotation_reviews`, `annotation_feedback`, `annotation_rewards` |
 | Communication | `messaging` | `conversations`, `conversation_participants`, `messages`, `message_attachments`, `notifications`, `email_outbox` |
-| Operations | `core` (audit, job records), `exports`, `admin`, `identity` (deletion requests) | `audit_logs`, `export_jobs`, `export_files`, `system_settings`, `background_job_records`, `takedown_requests`, `deletion_requests` |
+| Operations | `core` (audit, job records), `exports`, `admin`, `identity` (deletion requests) | `audit_logs`, `export_jobs`, `export_files`, `system_settings`, `background_job_records`, `takedown_requests`, `deletion_requests`, `dataset_code_counters` (AM-07; no FKs — codes are copied into `datasets.code`, `payout_requests.code`, `export_jobs.code`) |
 
 ### 1.1 Key relationship notes
 
@@ -249,6 +249,10 @@ erDiagram
     deletion_requests {
         uuid id PK
     }
+    dataset_code_counters {
+        varchar prefix PK
+        smallint year PK
+    }
     users ||--o| user_profiles : "user_id"
     users ||--o{ user_roles : "user_id"
     roles ||--o{ user_roles : "role_id"
@@ -381,6 +385,8 @@ erDiagram
         timestamptz mfa_enabled_at
         integer failed_login_count
         timestamptz locked_until
+        boolean legal_hold
+        text legal_hold_reason
         timestamptz last_login_at
         timestamptz password_changed_at
         timestamptz suspended_at
@@ -400,6 +406,7 @@ erDiagram
         varchar organization
         varchar preferred_locale
         varchar timezone
+        boolean privacy_trained
         jsonb notification_preferences
         timestamptz created_at
         timestamptz updated_at
@@ -538,6 +545,7 @@ erDiagram
 erDiagram
     datasets {
         uuid id PK
+        varchar code UK
         uuid owner_id FK
         varchar title
         text description
@@ -563,6 +571,8 @@ erDiagram
         uuid taken_down_by FK
         text takedown_reason
         timestamptz objects_purged_at
+        boolean legal_hold
+        text legal_hold_reason
         integer lock_version
         timestamptz created_at
         timestamptz updated_at
@@ -885,13 +895,13 @@ erDiagram
         uuid dataset_id FK
         uuid file_id FK
         uuid annotation_task_id FK
-        bytea sha256
+        char content_sha256
+        varchar pricing_tier
         varchar data_class
         bigint accepted_bytes
         uuid pricing_rule_id FK
         bigint rate_micros_per_gb
         bigint previously_paid_rate_micros_per_gb
-        boolean is_labeled_upgrade
         bigint amount_micros
         varchar zero_reason
         uuid journal_id FK
@@ -904,6 +914,7 @@ erDiagram
     }
     payout_requests {
         uuid id PK
+        varchar code UK
         uuid user_id FK
         uuid wallet_id FK
         uuid payout_method_id FK
@@ -1146,6 +1157,7 @@ erDiagram
         uuid annotator_id FK
         uuid reviewer_id FK
         integer review_round
+        varchar review_kind
         varchar status
         varchar decision
         smallint score
@@ -1388,6 +1400,7 @@ erDiagram
     }
     export_jobs {
         uuid id PK
+        varchar code UK
         uuid requested_by FK
         varchar status
         jsonb filters
@@ -1490,6 +1503,12 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    dataset_code_counters {
+        varchar prefix PK
+        smallint year PK
+        integer last_value
+        timestamptz updated_at
+    }
     users {
         uuid id PK
     }
@@ -1517,8 +1536,8 @@ erDiagram
 
 | # | Entity | Domain | Columns | PK |
 |---|---|---|---|---|
-| 1 | `users` | identity | 22 | `id` |
-| 2 | `user_profiles` | identity | 11 | `user_id` |
+| 1 | `users` | identity | 24 | `id` |
+| 2 | `user_profiles` | identity | 12 | `user_id` |
 | 3 | `roles` | identity | 8 | `id` |
 | 4 | `user_roles` | identity | 4 | `user_id, role_id` |
 | 5 | `user_sessions` | identity | 12 | `id` |
@@ -1528,7 +1547,7 @@ erDiagram
 | 9 | `agreement_acceptances` | identity | 9 | `id` |
 | 10 | `security_events` | identity | 10 | `id` |
 | 11 | `mfa_recovery_codes` | identity | 5 | `id` |
-| 12 | `datasets` | datasets | 29 | `id` |
+| 12 | `datasets` | datasets | 32 | `id` |
 | 13 | `dataset_versions` | datasets | 10 | `id` |
 | 14 | `dataset_files` | datasets | 36 | `id` |
 | 15 | `dataset_metadata` | datasets | 12 | `id` |
@@ -1545,7 +1564,7 @@ erDiagram
 | 26 | `ledger_journals` | finance | 12 | `id` |
 | 27 | `wallet_transactions` | finance | 8 | `id` |
 | 28 | `earning_records` | finance | 25 | `id` |
-| 29 | `payout_requests` | finance | 37 | `id` |
+| 29 | `payout_requests` | finance | 38 | `id` |
 | 30 | `payout_approvals` | finance | 7 | `id` |
 | 31 | `payout_records` | finance | 19 | `id` |
 | 32 | `payout_adjustments` | finance | 13 | `id` |
@@ -1555,7 +1574,7 @@ erDiagram
 | 36 | `annotation_assignments` | annotation | 11 | `id` |
 | 37 | `annotations` | annotation | 12 | `id` |
 | 38 | `annotation_versions` | annotation | 10 | `id` |
-| 39 | `annotation_reviews` | annotation | 15 | `id` |
+| 39 | `annotation_reviews` | annotation | 16 | `id` |
 | 40 | `annotation_feedback` | annotation | 13 | `id` |
 | 41 | `annotation_rewards` | annotation | 12 | `id` |
 | 42 | `conversations` | communication | 16 | `id` |
@@ -1565,9 +1584,10 @@ erDiagram
 | 46 | `notifications` | communication | 12 | `id` |
 | 47 | `email_outbox` | communication | 17 | `id` |
 | 48 | `audit_logs` | operations | 16 | `id` |
-| 49 | `export_jobs` | operations | 25 | `id` |
+| 49 | `export_jobs` | operations | 26 | `id` |
 | 50 | `export_files` | operations | 11 | `id` |
 | 51 | `system_settings` | operations | 8 | `key` |
 | 52 | `background_job_records` | operations | 18 | `id` |
 | 53 | `takedown_requests` | operations | 17 | `id` |
 | 54 | `deletion_requests` | operations | 13 | `id` |
+| 55 | `dataset_code_counters` | operations | 4 | `prefix, year` |

@@ -1,9 +1,9 @@
-# DataHub OpenAPI 3.1 specification — Document control: v1.0, 2026-10-26, Baseline.
+# DataHub OpenAPI 3.1 specification — Document control: v1.1, 2026-10-26, Baseline (§16 amendments applied).
 # Canonical source: docs/ENGINEERING_BASELINE.md §12. Human-readable companion: API_DOCUMENTATION.md.
 openapi: 3.1.0
 info:
   title: DataHub API
-  version: 1.0.0
+  version: 1.1.0
   summary: Data marketplace & annotation platform API (documentation baseline).
   description: 'Canonical contract per docs/ENGINEERING_BASELINE.md §12. All paths are under `/api/v1`; JSON (UTF-8) bodies; errors use `{"error":{"code","message","details","request_id"}}`.
     Money fields are integer micro-USD (`*_micros`), sizes are integer bytes (`*_bytes`), timestamps RFC 3339 UTC. Cookie session `dh_session`;
@@ -69,6 +69,7 @@ paths:
       security: []
       x-permission: public
       x-rate-limit: Not rate-limited (health probes; internal metrics).
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -101,6 +102,7 @@ paths:
       security: []
       x-permission: public
       x-rate-limit: Not rate-limited (health probes; internal metrics).
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -145,6 +147,7 @@ paths:
       security: []
       x-permission: internal
       x-rate-limit: Not rate-limited (health probes; internal metrics).
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -173,6 +176,7 @@ paths:
       security: []
       x-permission: public
       x-rate-limit: 60 / min per IP.
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -221,6 +225,7 @@ paths:
       - csrfToken: []
       x-permission: public
       x-rate-limit: 5 / h per IP.
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -311,7 +316,8 @@ paths:
       security:
       - csrfToken: []
       x-permission: public
-      x-rate-limit: 5 / min per (IP + email) and 20 / min per IP; account lockout after 10 consecutive failures (15 min).
+      x-rate-limit: 5 / min per (IP + email) and 20 / min per IP; account lockout after 5 failures within 15 min (locked 15 min).
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -416,6 +422,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 5 / min per session and 20 / h per user; 10 consecutive failures revoke the MFA-pending session.
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -526,6 +533,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: true
       responses:
         '204':
           description: No Content
@@ -583,6 +591,7 @@ paths:
       - csrfToken: []
       x-permission: public
       x-rate-limit: 10 / h per IP (verify-email, reset-password).
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -670,6 +679,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 3 / h per user.
+      x-maintenance-exempt: true
       responses:
         '202':
           description: Accepted
@@ -736,6 +746,7 @@ paths:
       - csrfToken: []
       x-permission: public
       x-rate-limit: 3 / h per email and 10 / h per IP (silently not sent above limit; response still 202).
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -823,6 +834,7 @@ paths:
       - csrfToken: []
       x-permission: public
       x-rate-limit: 10 / h per IP (verify-email, reset-password).
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -907,6 +919,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 5 / h per user (change-password, MFA setup/disable, payout-method create).
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -998,6 +1011,7 @@ paths:
       - cookieAuth: []
       x-permission: authenticated
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -1055,6 +1069,7 @@ paths:
       - cookieAuth: []
       x-permission: authenticated
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -1117,6 +1132,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: true
       responses:
         '204':
           description: No Content
@@ -1185,6 +1201,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -1245,6 +1262,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 5 / h per user (change-password, MFA setup/disable, payout-method create).
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -1348,6 +1366,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 5 / min per session and 20 / h per user; 10 consecutive failures revoke the MFA-pending session.
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -1453,6 +1472,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 5 / h per user (change-password, MFA setup/disable, payout-method create).
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -1549,6 +1569,7 @@ paths:
       - cookieAuth: []
       x-permission: profile.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -1597,6 +1618,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     patch:
       tags:
       - Me
@@ -1612,6 +1643,7 @@ paths:
         csrfToken: []
       x-permission: profile.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -1702,6 +1734,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/me/onboarding:
     post:
       tags:
@@ -1718,6 +1760,7 @@ paths:
         csrfToken: []
       x-permission: profile.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -1803,6 +1846,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/me/payout-methods:
     get:
       tags:
@@ -1816,6 +1869,7 @@ paths:
       - cookieAuth: []
       x-permission: payout.request
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -1862,6 +1916,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     post:
       tags:
       - Me
@@ -1876,6 +1940,7 @@ paths:
         csrfToken: []
       x-permission: payout.request
       x-rate-limit: 5 / h per user (change-password, MFA setup/disable, payout-method create).
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -1965,6 +2030,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/me/payout-methods/{method_id}:
     delete:
       tags:
@@ -1985,6 +2060,7 @@ paths:
         csrfToken: []
       x-permission: payout.request
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '204':
           description: No Content
@@ -2046,6 +2122,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/me/verification:
     get:
       tags:
@@ -2059,6 +2145,7 @@ paths:
       - cookieAuth: []
       x-permission: profile.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -2106,6 +2193,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     post:
       tags:
       - Me
@@ -2121,6 +2218,7 @@ paths:
         csrfToken: []
       x-permission: profile.self
       x-rate-limit: 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -2203,6 +2301,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/me/deletion-request:
     post:
       tags:
@@ -2219,6 +2327,7 @@ paths:
         csrfToken: []
       x-permission: profile.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -2307,6 +2416,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/me/notification-preferences:
     get:
       tags:
@@ -2320,6 +2439,7 @@ paths:
       - cookieAuth: []
       x-permission: profile.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -2366,6 +2486,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     patch:
       tags:
       - Me
@@ -2379,6 +2509,7 @@ paths:
         csrfToken: []
       x-permission: profile.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -2460,6 +2591,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/public/pricing:
     get:
       tags:
@@ -2472,6 +2613,7 @@ paths:
       security: []
       x-permission: public
       x-rate-limit: 60 / min per IP.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -2505,6 +2647,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/public/formats:
     get:
       tags:
@@ -2517,6 +2669,7 @@ paths:
       security: []
       x-permission: public
       x-rate-limit: 60 / min per IP.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -2531,7 +2684,7 @@ paths:
                 $ref: '#/components/schemas/FormatList'
               example: {items: [{extension: pdf, mime_types: [application/pdf], allowed: true, preview: page_images, annotatable: page_level,
                     payable: 'yes', notes: First 500 pages rendered.}, {extension: zip, mime_types: [application/zip], allowed: true, preview: member_list,
-                    annotatable: 'no', payable: members_only, notes: Container never payable; members processed individually.}], limits: {max_file_bytes: 5000000000,
+                    annotatable: 'no', payable: members_only, notes: Container never payable; members processed individually.}], limits: {max_file_bytes: 4000000000,
                   max_dataset_bytes: 50000000000, user_pending_quota_bytes: 200000000000, max_files_per_dataset: 2000, part_size_bytes: 16777216}}
         '429':
           description: 'Too Many Requests. Error codes: `rate_limited`'
@@ -2551,6 +2704,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/public/contact:
     post:
       tags:
@@ -2565,6 +2728,7 @@ paths:
       - csrfToken: []
       x-permission: public
       x-rate-limit: 5 / h per IP.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -2638,6 +2802,118 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+  /api/v1/public/takedown-requests:
+    post:
+      tags:
+      - Public
+      summary: Submit a takedown / rights or privacy complaint
+      operationId: post_public_takedown_requests
+      description: For rights holders and data subjects; **no login required** (AM-04). Creates a `takedown_requests` row (`source=public_form`,
+        `status=received`), resolves `dataset_reference` (code or UUID) to `dataset_id` when it matches (the response never reveals whether it
+        matched), emails an acknowledgement to the requester, and notifies `user.manage` holders. Rate-limited 5 / h per IP; honeypot `website`
+        must be empty (bots get a silent 202). Signed-in users may use it too (`requester_user_id` is recorded).
+      parameters:
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - csrfToken: []
+      x-permission: public
+      x-rate-limit: 5 / h per IP.
+      x-maintenance-exempt: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TakedownClaimCreate'
+            example: {requester_name: Chan Vuthy, requester_email: rights@publisher.example, requester_organization: Angkor Press Co., claim_type: copyright,
+              dataset_reference: DS-2026-000123, file_reference: null, description: 'Pages 1–48 of this dataset are scans of our 1994 newspaper
+                editions, reproduced without permission.', evidence_url: 'https://publisher.example/catalogue/1994', sworn_statement: true, website: ''}
+      responses:
+        '202':
+          description: Accepted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Accepted'
+              example: {status: accepted, message: Your notice has been received. We will acknowledge it by email within 2 business days.}
+        '400':
+          description: 'Bad Request. Error codes: `request.malformed`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.malformed, message: The request body is not valid JSON or has the wrong shape., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `csrf.missing`, `csrf.invalid`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: csrf.missing, message: Security token missing. Reload the page., details: null, request_id: req_01JBA7Q4M8}}
+        '413':
+          description: 'Content Too Large. Error codes: `request.payload_too_large`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.payload_too_large, message: Request body too large., details: null, request_id: req_01JBA7Q4M8}}
+        '415':
+          description: 'Unsupported Media Type. Error codes: `request.unsupported_media_type`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.unsupported_media_type, message: Unsupported Content-Type., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: validation_error, message: One or more fields are invalid., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets:
     post:
       tags:
@@ -2653,6 +2929,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -2678,8 +2955,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dataset'
-              example: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea K.,
-                title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
+              example: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
+                  K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
                 category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
                 personal_data_notes: null, status: draft, version_number: 1, file_count: 0, ready_file_count: 0, failed_file_count: 0, total_bytes: 0,
                 accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null,
@@ -2746,6 +3023,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     get:
       tags:
       - Datasets
@@ -2762,9 +3049,15 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/DatasetStatus'
-        description: Filter by status (repeatable).
+          type: array
+          items:
+            $ref: '#/components/schemas/DatasetStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter by status (repeatable). Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: data_class
         in: query
         required: false
@@ -2786,6 +3079,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.read.own
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -2798,12 +3092,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedDataset'
-              example: {items: [{id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
-                      K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
-                    category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
-                    personal_data_notes: null, status: draft, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200,
-                    accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null,
-                    created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T09:15:00Z', version: 4}], page: 1, page_size: 25, total: 1}
+              example: {items: [{id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01,
+                    owner_display_name: Sophea K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers,
+                      300 dpi.', data_class: raw, category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive,
+                      scanned by me.', contains_personal_data: false, personal_data_notes: null, status: draft, version_number: 1, file_count: 2,
+                    ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200, accepted_bytes: null, earned_micros: null, license_version: CA-2026-10,
+                    takedown_reason: null, submitted_at: null, finalized_at: null, created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T09:15:00Z',
+                    version: 4}], page: 1, page_size: 25, total: 1}
         '401':
           description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
           content:
@@ -2843,6 +3138,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}:
     get:
       tags:
@@ -2862,6 +3167,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.read.own
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -2876,8 +3182,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dataset'
-              example: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea K.,
-                title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
+              example: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
+                  K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
                 category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
                 personal_data_notes: null, status: draft, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200,
                 accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null,
@@ -2928,6 +3234,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     patch:
       tags:
       - Datasets
@@ -2948,6 +3264,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -2969,8 +3286,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dataset'
-              example: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea K.,
-                title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
+              example: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
+                  K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
                 category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
                 personal_data_notes: null, status: draft, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200,
                 accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null,
@@ -3057,6 +3374,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     delete:
       tags:
       - Datasets
@@ -3077,6 +3404,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '204':
           description: No Content
@@ -3139,6 +3467,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/submit:
     post:
       tags:
@@ -3161,6 +3499,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -3173,8 +3512,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dataset'
-              example: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea K.,
-                title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
+              example: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
+                  K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
                 category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
                 personal_data_notes: null, status: submitted, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200,
                 accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: '2026-10-26T09:15:00Z',
@@ -3233,6 +3572,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/withdraw:
     post:
       tags:
@@ -3253,6 +3602,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -3265,8 +3615,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dataset'
-              example: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea K.,
-                title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
+              example: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
+                  K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
                 category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
                 personal_data_notes: null, status: withdrawn, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200,
                 accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null,
@@ -3325,6 +3675,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/files:
     get:
       tags:
@@ -3346,9 +3706,15 @@ paths:
       - name: processing_status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/FileProcessingStatus'
-        description: Filter.
+          type: array
+          items:
+            $ref: '#/components/schemas/FileProcessingStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `processing_status=a,b` (repeated keys also accepted).
       - name: include_members
         in: query
         required: false
@@ -3376,6 +3742,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.read.own
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -3391,10 +3758,10 @@ paths:
               example: {items: [{id: 01930b72-3333-7c00-8000-0000000000f1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1, parent_file_id: null,
                     original_filename: phnom-penh-post-1994-03.pdf, relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null, extension: pdf,
                     declared_mime: application/pdf, detected_mime: application/pdf, size_bytes: 367001600, sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d,
-                    processing_status: ready, scan_status: clean, scan_mode: full, failure_code: null, failure_message: null, is_container: false,
-                    page_count: 48, previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [
-                      {kind: near, method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true,
-                        same_owner: false}], review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}],
+                    processing_status: ready, scan_status: clean, failure_code: null, failure_message: null, is_container: false, page_count: 48,
+                    previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [{kind: near,
+                        method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true, same_owner: false}],
+                    review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}],
                 page: 1, page_size: 25, total: 1}
         '401':
           description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
@@ -3442,6 +3809,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/files/{file_id}:
     delete:
       tags:
@@ -3468,6 +3845,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '204':
           description: No Content
@@ -3530,6 +3908,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/reviews:
     get:
       tags:
@@ -3549,6 +3937,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.read.own
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -3611,6 +4000,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/estimate:
     get:
       tags:
@@ -3631,6 +4030,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.read.own
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -3692,6 +4092,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/files/{file_id}:
     get:
       tags:
@@ -3712,6 +4122,7 @@ paths:
       - cookieAuth: []
       x-permission: authenticated
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -3727,8 +4138,8 @@ paths:
               example: {id: 01930b72-3333-7c00-8000-0000000000f1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1, parent_file_id: null, original_filename: phnom-penh-post-1994-03.pdf,
                 relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null, extension: pdf, declared_mime: application/pdf, detected_mime: application/pdf,
                 size_bytes: 367001600, sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d, processing_status: ready, scan_status: clean,
-                scan_mode: full, failure_code: null, failure_message: null, is_container: false, page_count: 48, previews: [{page: 1, width: 1654,
-                    height: 2339, content_type: image/webp}], text_available: false, duplicates: [{kind: near, method: dhash, distance: 3, matched_file_id: null,
+                failure_code: null, failure_message: null, is_container: false, page_count: 48, previews: [{page: 1, width: 1654, height: 2339,
+                    content_type: image/webp}], text_available: false, duplicates: [{kind: near, method: dhash, distance: 3, matched_file_id: null,
                     matched_dataset_id: null, matched_previously_accepted: true, same_owner: false}], review_decision: null, created_at: '2026-10-26T08:30:00Z',
                 uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}
         '401':
@@ -3777,6 +4188,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/files/{file_id}/preview/{page}:
     get:
       tags:
@@ -3804,6 +4225,7 @@ paths:
       - cookieAuth: []
       x-permission: authenticated
       x-rate-limit: 120 / min per user (presigned URL issuance, preview redirects).
+      x-maintenance-exempt: false
       responses:
         '302':
           description: Found
@@ -3867,6 +4289,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/files/{file_id}/text:
     get:
       tags:
@@ -3887,6 +4319,7 @@ paths:
       - cookieAuth: []
       x-permission: authenticated
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -3953,6 +4386,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/files/{file_id}/download-url:
     post:
       tags:
@@ -3975,6 +4418,7 @@ paths:
         csrfToken: []
       x-permission: authenticated
       x-rate-limit: 120 / min per user (presigned URL issuance, preview redirects).
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -4070,6 +4514,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/uploads:
     post:
       tags:
@@ -4093,6 +4547,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -4160,7 +4615,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-              example: {error: {code: upload.file_too_large, message: File exceeds the 5 GB limit., details: null, request_id: req_01JBA7Q4M8}}
+              example: {error: {code: upload.file_too_large, message: 'File exceeds the 4 GB (4,000,000,000 bytes) limit.', details: null, request_id: req_01JBA7Q4M8}}
         '415':
           description: 'Unsupported Media Type. Error codes: `upload.type_not_allowed`, `request.unsupported_media_type`'
           content:
@@ -4192,6 +4647,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: upload.storage_unavailable, message: Storage temporarily unavailable. Retry., details: null, request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/uploads/{upload_id}/part-urls:
     post:
       tags:
@@ -4214,6 +4679,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -4308,6 +4774,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: upload.storage_unavailable, message: Storage temporarily unavailable. Retry., details: null, request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/uploads/{upload_id}:
     get:
       tags:
@@ -4328,6 +4804,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.create
       x-rate-limit: 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -4389,6 +4866,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: upload.storage_unavailable, message: Storage temporarily unavailable. Retry., details: null, request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     delete:
       tags:
       - Uploads
@@ -4408,6 +4895,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
+      x-maintenance-exempt: false
       responses:
         '204':
           description: No Content
@@ -4469,6 +4957,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/uploads/{upload_id}/complete:
     post:
       tags:
@@ -4491,6 +4989,7 @@ paths:
         csrfToken: []
       x-permission: dataset.create
       x-rate-limit: 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -4512,7 +5011,7 @@ paths:
                 $ref: '#/components/schemas/DatasetFile'
               example: {id: 01930b72-3333-7c00-8000-0000000000f2, dataset_id: 01930b71-2222-7b00-8000-0000000000d1, parent_file_id: null, original_filename: scans-1995.zip,
                 relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null, extension: zip, declared_mime: application/pdf, detected_mime: application/pdf,
-                size_bytes: 367001600, sha256: null, processing_status: uploaded, scan_status: pending, scan_mode: full, failure_code: null, failure_message: null,
+                size_bytes: 367001600, sha256: null, processing_status: uploaded, scan_status: pending, failure_code: null, failure_message: null,
                 is_container: true, page_count: null, previews: [], text_available: false, duplicates: [], review_decision: null, created_at: '2026-10-26T08:30:00Z',
                 uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}
         '400':
@@ -4556,7 +5055,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-              example: {error: {code: upload.file_too_large, message: File exceeds the 5 GB limit., details: null, request_id: req_01JBA7Q4M8}}
+              example: {error: {code: upload.file_too_large, message: 'File exceeds the 4 GB (4,000,000,000 bytes) limit.', details: null, request_id: req_01JBA7Q4M8}}
         '415':
           description: 'Unsupported Media Type. Error codes: `request.unsupported_media_type`'
           content:
@@ -4588,6 +5087,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: upload.storage_unavailable, message: Storage temporarily unavailable. Retry., details: null, request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/queue:
     get:
       tags:
@@ -4602,12 +5111,18 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          type: string
-          enum:
-          - submitted
-          - in_review
-        description: Default submitted.
+          type: array
+          items:
+            type: string
+            enum:
+            - submitted
+            - in_review
+          minItems: 1
+          uniqueItems: true
+        description: Default submitted. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: data_class
         in: query
         required: false
@@ -4641,6 +5156,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.review
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -4653,10 +5169,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedReviewQueueItem'
-              example: {items: [{dataset_id: 01930b71-2222-7b00-8000-0000000000d1, title: Khmer newspaper scans 1990–1999, owner_display_name: Sophea
-                      K., data_class: raw, category: news, languages: [km], file_count: 2, total_bytes: 734003200, submitted_at: '2026-10-26T09:15:00Z',
-                    version_number: 1, has_duplicate_flags: true, contains_personal_data: false, status: submitted, claimed_review_id: null}],
-                page: 1, page_size: 25, total: 1}
+              example: {items: [{dataset_id: 01930b71-2222-7b00-8000-0000000000d1, dataset_code: DS-2026-000123, title: Khmer newspaper scans
+                      1990–1999, owner_display_name: Sophea K., data_class: raw, category: news, languages: [km], file_count: 2, total_bytes: 734003200,
+                    submitted_at: '2026-10-26T09:15:00Z', version_number: 1, has_duplicate_flags: true, contains_personal_data: false, status: submitted,
+                    claimed_review_id: null}], page: 1, page_size: 25, total: 1}
         '401':
           description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
           content:
@@ -4696,6 +5212,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/datasets/{dataset_id}/claim-review:
     post:
       tags:
@@ -4703,7 +5229,8 @@ paths:
       summary: Claim a submitted dataset for review
       operationId: post_datasets_by_dataset_claim_review
       description: '`submitted → in_review`; creates `dataset_reviews` (`in_progress`) with the caller as assignee. Uses `SELECT … FOR UPDATE
-        SKIP LOCKED`-style guard; a concurrent claim gets 409. Owner cannot claim.'
+        SKIP LOCKED`-style guard; a concurrent claim gets 409. Owner cannot claim. A reviewer may hold at most `review_max_active_claims` (setting,
+        default 5) in-progress reviews (AM-09).'
       parameters:
       - name: dataset_id
         in: path
@@ -4717,6 +5244,7 @@ paths:
         csrfToken: []
       x-permission: dataset.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '201':
           description: Created
@@ -4758,12 +5286,13 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: resource.not_found, message: Not found., details: null, request_id: req_01JBA7Q4M8}}
         '409':
-          description: 'Conflict. Error codes: `review.already_claimed`, `dataset.invalid_state`'
+          description: 'Conflict. Error codes: `review.claim_limit_reached`, `review.already_claimed`, `dataset.invalid_state`'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-              example: {error: {code: review.already_claimed, message: Another reviewer has claimed this dataset., details: null, request_id: req_01JBA7Q4M8}}
+              example: {error: {code: review.claim_limit_reached, message: You already hold the maximum number of active review claims., details: null,
+                  request_id: req_01JBA7Q4M8}}
         '422':
           description: 'Unprocessable Content. Error codes: `validation_error`'
           content:
@@ -4789,6 +5318,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/{review_id}:
     get:
       tags:
@@ -4809,6 +5348,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.review
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -4826,19 +5366,19 @@ paths:
                   checklist: {rights_plausible: true, matches_description: true, language_correct: true, no_unconsented_personal_data: true, no_copyright_concern: null,
                     quality_acceptable: true, metadata_complete: true}, quality_scores: {legibility: 4, completeness: 5, accuracy: null, relevance: 5,
                     labeling_quality: null}, overall_quality: 4.67, internal_comments: Check page 12 for faded print., feedback: null, claimed_at: '2026-10-26T08:30:00Z',
-                  finalized_at: null, released_at: null, version: 2}, dataset: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01,
-                  owner_display_name: Sophea K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers,
-                    300 dpi.', data_class: raw, category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive,
-                    scanned by me.', contains_personal_data: false, personal_data_notes: null, status: in_review, version_number: 1, file_count: 2,
-                  ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200, accepted_bytes: null, earned_micros: null, license_version: CA-2026-10,
-                  takedown_reason: null, submitted_at: null, finalized_at: null, created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T09:15:00Z',
-                  version: 4}, files: [{id: 01930b72-3333-7c00-8000-0000000000f1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1, parent_file_id: null,
-                    original_filename: phnom-penh-post-1994-03.pdf, relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null, extension: pdf,
-                    declared_mime: application/pdf, detected_mime: application/pdf, size_bytes: 367001600, sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d,
-                    processing_status: ready, scan_status: clean, scan_mode: full, failure_code: null, failure_message: null, is_container: false,
-                    page_count: 48, previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [
-                      {kind: near, method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true,
-                        same_owner: false}], review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}],
+                  finalized_at: null, released_at: null, version: 2}, dataset: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123,
+                  owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea K., title: Khmer newspaper scans 1990–1999, description: 'Scanned
+                    front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw, category: news, languages: [km], tags: [newspaper, ocr],
+                  source_description: 'Personal archive, scanned by me.', contains_personal_data: false, personal_data_notes: null, status: in_review,
+                  version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200, accepted_bytes: null, earned_micros: null,
+                  license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null, created_at: '2026-10-26T08:30:00Z',
+                  updated_at: '2026-10-26T09:15:00Z', version: 4}, files: [{id: 01930b72-3333-7c00-8000-0000000000f1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1,
+                    parent_file_id: null, original_filename: phnom-penh-post-1994-03.pdf, relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null,
+                    extension: pdf, declared_mime: application/pdf, detected_mime: application/pdf, size_bytes: 367001600, sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d,
+                    processing_status: ready, scan_status: clean, failure_code: null, failure_message: null, is_container: false, page_count: 48,
+                    previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [{kind: near,
+                        method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true, same_owner: false}],
+                    review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}],
                 file_reviews: [{file_id: 01930b72-3333-7c00-8000-0000000000f1, decision: accepted, reason_code: null, comment: null, labeled_upgrade: false,
                     reviewer_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f04, reviewed_at: '2026-10-26T09:15:00Z'}], summary: {review_id: 01930b74-5555-7e00-8000-0000000000c1,
                   total_files: 2, decided_files: 2, undecided_files: 0, not_reviewable_files: 0, accepted_files: 1, rejected_files: 1, accepted_bytes: 367001600,
@@ -4891,6 +5431,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     patch:
       tags:
       - Review
@@ -4911,6 +5461,7 @@ paths:
         csrfToken: []
       x-permission: dataset.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -5020,6 +5571,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/{review_id}/files/{file_id}:
     put:
       tags:
@@ -5046,6 +5607,7 @@ paths:
         csrfToken: []
       x-permission: dataset.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -5143,6 +5705,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/{review_id}/files/bulk:
     post:
       tags:
@@ -5163,6 +5735,7 @@ paths:
         csrfToken: []
       x-permission: dataset.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -5258,6 +5831,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/{review_id}/summary:
     get:
       tags:
@@ -5277,6 +5860,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.review
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -5339,6 +5923,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/{review_id}/finalize:
     post:
       tags:
@@ -5362,6 +5956,7 @@ paths:
         csrfToken: []
       x-permission: dataset.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -5466,6 +6061,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/{review_id}/release:
     post:
       tags:
@@ -5487,6 +6092,7 @@ paths:
         csrfToken: []
       x-permission: dataset.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -5559,6 +6165,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/reviews/history:
     get:
       tags:
@@ -5605,6 +6221,7 @@ paths:
       - cookieAuth: []
       x-permission: dataset.review
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -5663,6 +6280,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/wallet:
     get:
       tags:
@@ -5677,6 +6304,7 @@ paths:
       - cookieAuth: []
       x-permission: payout.request
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -5723,6 +6351,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/wallet/transactions:
     get:
       tags:
@@ -5767,6 +6405,7 @@ paths:
       - cookieAuth: []
       x-permission: payout.request
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -5823,6 +6462,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/earnings:
     get:
       tags:
@@ -5872,6 +6521,7 @@ paths:
       - cookieAuth: []
       x-permission: payout.request
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -5928,6 +6578,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/payouts:
     post:
       tags:
@@ -5945,6 +6605,7 @@ paths:
         csrfToken: []
       x-permission: payout.request
       x-rate-limit: 10 / h per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -5968,8 +6629,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [],
                 record: null, rejection_reason: null, failure_reason: null, cancellation_reason: null, reversal_reason: null, created_at: '2026-10-26T08:30:00Z',
                 updated_at: '2026-10-26T08:30:00Z', version: 1}
@@ -6043,6 +6704,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     get:
       tags:
       - Finance
@@ -6056,9 +6727,15 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/PayoutStatus'
-        description: Filter.
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - $ref: '#/components/parameters/Page'
       - $ref: '#/components/parameters/PageSize'
       - $ref: '#/components/parameters/Sort'
@@ -6067,6 +6744,7 @@ paths:
       - cookieAuth: []
       x-permission: payout.request
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -6079,8 +6757,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedPayout'
-              example: {items: [{id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
-                      K., amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102,
+              example: {items: [{id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01,
+                    user_display_name: Sophea K., amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102,
                       type: aba_pay, label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1,
                     approvals: [], record: null, rejection_reason: null, failure_reason: null, cancellation_reason: null, reversal_reason: null,
                     created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T08:30:00Z', version: 1}], page: 1, page_size: 25, total: 1}
@@ -6123,6 +6801,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/payouts/{payout_id}:
     get:
       tags:
@@ -6142,6 +6830,7 @@ paths:
       - cookieAuth: []
       x-permission: payout.request
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -6154,8 +6843,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: paid, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: paid, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [
                   {id: 01930b76-7777-7000-8000-000000000103, payout_id: 01930b76-7777-7000-8000-000000000101, approver_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
                     approver_name: Admin Vanna, comment: null, created_at: '2026-10-26T09:15:00Z'}], record: {id: 01930b76-7777-7000-8000-000000000104,
@@ -6209,6 +6898,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/payouts/{payout_id}/cancel:
     post:
       tags:
@@ -6230,6 +6929,7 @@ paths:
         csrfToken: []
       x-permission: payout.request
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -6244,8 +6944,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: cancelled, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: cancelled, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [],
                 record: null, rejection_reason: null, failure_reason: null, cancellation_reason: Cancelled by contributor, reversal_reason: null,
                 created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T08:30:00Z', version: 2}
@@ -6309,6 +7009,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/admin/finance/overview:
     get:
       tags:
@@ -6323,6 +7033,7 @@ paths:
       x-permission: finance.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -6383,19 +7094,32 @@ paths:
       - amount_micros
       - updated_at
       parameters:
-      - name: status
+      - name: q
         in: query
         required: false
         schema:
-          $ref: '#/components/schemas/PayoutStatus'
-        description: Filter (repeatable).
+          type: string
+          maxLength: 200
+        description: Payout code (`PO-YYYY-NNNNNN`, exact or prefix), recipient email or display name.
+      - name: status
+        in: query
+        required: false
+        style: form
+        explode: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: user_id
         in: query
         required: false
         schema:
           type: string
           format: uuid
-        description: Filter.
+        description: Only payouts of this recipient (AM-05; used by the user-detail page).
       - name: method
         in: query
         required: false
@@ -6439,6 +7163,7 @@ paths:
       x-permission: finance.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -6451,8 +7176,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedPayout'
-              example: {items: [{id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
-                      K., amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102,
+              example: {items: [{id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01,
+                    user_display_name: Sophea K., amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102,
                       type: aba_pay, label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1,
                     approvals: [], record: null, rejection_reason: null, failure_reason: null, cancellation_reason: null, reversal_reason: null,
                     created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T08:30:00Z', version: 1}], page: 1, page_size: 25, total: 1}
@@ -6515,6 +7240,7 @@ paths:
       x-permission: finance.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -6527,8 +7253,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: requested, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: 000124821}}, note: null, approvals_required: 1, approvals: [],
                 record: null, rejection_reason: null, failure_reason: null, cancellation_reason: null, reversal_reason: null, created_at: '2026-10-26T08:30:00Z',
                 updated_at: '2026-10-26T08:30:00Z', version: 1}
@@ -6602,6 +7328,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -6623,8 +7350,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: approved, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: approved, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [
                   {id: 01930b76-7777-7000-8000-000000000103, payout_id: 01930b76-7777-7000-8000-000000000101, approver_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
                     approver_name: Admin Vanna, comment: null, created_at: '2026-10-26T09:15:00Z'}], record: null, rejection_reason: null, failure_reason: null,
@@ -6727,6 +7454,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -6748,8 +7476,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: rejected, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: rejected, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [],
                 record: null, rejection_reason: Account name does not match verified legal name., failure_reason: null, cancellation_reason: null,
                 reversal_reason: null, created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T08:30:00Z', version: 2}
@@ -6852,6 +7580,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -6873,8 +7602,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: paid, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: paid, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [
                   {id: 01930b76-7777-7000-8000-000000000103, payout_id: 01930b76-7777-7000-8000-000000000101, approver_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
                     approver_name: Admin Vanna, comment: null, created_at: '2026-10-26T09:15:00Z'}], record: {id: 01930b76-7777-7000-8000-000000000104,
@@ -6981,6 +7710,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -7002,8 +7732,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: failed, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: failed, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [],
                 record: null, rejection_reason: null, failure_reason: 'Bank rejected transfer: account closed.', cancellation_reason: null, reversal_reason: null,
                 created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T08:30:00Z', version: 3}
@@ -7105,6 +7835,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -7126,8 +7857,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: cancelled, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: cancelled, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [],
                 record: null, rejection_reason: null, failure_reason: null, cancellation_reason: Contributor asked to change method., reversal_reason: null,
                 created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T08:30:00Z', version: 3}
@@ -7229,6 +7960,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -7250,8 +7982,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payout'
-              example: {id: 01930b76-7777-7000-8000-000000000101, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea K.,
-                amount_micros: 10000000, currency: USD, status: reversed, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
+              example: {id: 01930b76-7777-7000-8000-000000000101, code: PO-2026-000042, user_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, user_display_name: Sophea
+                  K., amount_micros: 10000000, currency: USD, status: reversed, payout_method: {id: 01930b76-7777-7000-8000-000000000102, type: aba_pay,
                   label: My ABA account, details: {account_name: KEO SOPHEA, account_number: •••• 4821}}, note: null, approvals_required: 1, approvals: [
                   {id: 01930b76-7777-7000-8000-000000000103, payout_id: 01930b76-7777-7000-8000-000000000101, approver_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
                     approver_name: Admin Vanna, comment: null, created_at: '2026-10-26T09:15:00Z'}], record: {id: 01930b76-7777-7000-8000-000000000104,
@@ -7356,6 +8088,7 @@ paths:
       x-permission: payout.record_payment
       x-rate-limit: 600 / min per user (init, part-urls, status, complete, abort; multipart verification/proof).
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -7464,6 +8197,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -7618,6 +8352,7 @@ paths:
       x-permission: finance.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -7688,6 +8423,7 @@ paths:
       x-permission: finance.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -7754,6 +8490,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -7860,6 +8597,7 @@ paths:
       x-permission: finance.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -7920,9 +8658,15 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/AnnotationProjectStatus'
-        description: Filter.
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnotationProjectStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: q
         in: query
         required: false
@@ -7939,6 +8683,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -8011,6 +8756,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -8124,6 +8870,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -8212,6 +8959,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -8345,6 +9093,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -8461,6 +9210,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -8555,9 +9305,15 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/AnnotationTaskStatus'
-        description: Filter (repeatable).
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnotationTaskStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter (repeatable). Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: assignee_id
         in: query
         required: false
@@ -8587,6 +9343,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -8673,6 +9430,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -8788,6 +9546,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -8897,6 +9656,7 @@ paths:
       x-permission: annotation.manage
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -8982,9 +9742,15 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/AnnotationTaskStatus'
-        description: Filter (repeatable).
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnotationTaskStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter (repeatable). Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: project_id
         in: query
         required: false
@@ -9000,6 +9766,7 @@ paths:
       - cookieAuth: []
       x-permission: annotation.work
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -9057,6 +9824,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/tasks/{task_id}:
     get:
       tags:
@@ -9077,6 +9854,7 @@ paths:
       - cookieAuth: []
       x-permission: annotation.work | annotation.review | annotation.manage
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -9101,10 +9879,10 @@ paths:
                       label: Publication date, type: date, options: [], required: true}]}, file: {id: 01930b72-3333-7c00-8000-0000000000f1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1,
                   parent_file_id: null, original_filename: phnom-penh-post-1994-03.pdf, relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null,
                   extension: pdf, declared_mime: application/pdf, detected_mime: application/pdf, size_bytes: 367001600, sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d,
-                  processing_status: ready, scan_status: clean, scan_mode: full, failure_code: null, failure_message: null, is_container: false,
-                  page_count: 48, previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [
-                    {kind: near, method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true,
-                      same_owner: false}], review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'},
+                  processing_status: ready, scan_status: clean, failure_code: null, failure_message: null, is_container: false, page_count: 48,
+                  previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [{kind: near,
+                      method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true, same_owner: false}],
+                  review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'},
                 annotation: {id: 01930b77-8888-7100-8000-000000000203, task_id: 01930b77-8888-7100-8000-000000000202, data: {pages: [{page: 3,
                         transcription: ព័ត៌មានថ្ងៃនេះ, corrected_text: null, page_label: article, regions: []}], classification: [], metadata: {
                       publication_date: '1994-03-12'}, notes: null}, version: 7, content_sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d,
@@ -9155,6 +9933,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/tasks/{task_id}/start:
     post:
       tags:
@@ -9175,6 +9963,7 @@ paths:
         csrfToken: []
       x-permission: annotation.work
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -9197,10 +9986,10 @@ paths:
                       label: Publication date, type: date, options: [], required: true}]}, file: {id: 01930b72-3333-7c00-8000-0000000000f1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1,
                   parent_file_id: null, original_filename: phnom-penh-post-1994-03.pdf, relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null,
                   extension: pdf, declared_mime: application/pdf, detected_mime: application/pdf, size_bytes: 367001600, sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d,
-                  processing_status: ready, scan_status: clean, scan_mode: full, failure_code: null, failure_message: null, is_container: false,
-                  page_count: 48, previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [
-                    {kind: near, method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true,
-                      same_owner: false}], review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'},
+                  processing_status: ready, scan_status: clean, failure_code: null, failure_message: null, is_container: false, page_count: 48,
+                  previews: [{page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [{kind: near,
+                      method: dhash, distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true, same_owner: false}],
+                  review_decision: null, created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'},
                 annotation: {id: 01930b77-8888-7100-8000-000000000203, task_id: 01930b77-8888-7100-8000-000000000202, data: {pages: [{page: 3,
                         transcription: ព័ត៌មានថ្ងៃនេះ, corrected_text: null, page_label: article, regions: []}], classification: [], metadata: {
                       publication_date: '1994-03-12'}, notes: null}, version: 0, content_sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d,
@@ -9259,6 +10048,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/tasks/{task_id}/draft:
     put:
       tags:
@@ -9282,6 +10081,7 @@ paths:
         csrfToken: []
       x-permission: annotation.work
       x-rate-limit: 60 / min per user per task.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -9380,6 +10180,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/tasks/{task_id}/submit:
     post:
       tags:
@@ -9402,6 +10212,7 @@ paths:
         csrfToken: []
       x-permission: annotation.work
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -9508,6 +10319,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/tasks/{task_id}/versions:
     get:
       tags:
@@ -9541,6 +10362,7 @@ paths:
       - cookieAuth: []
       x-permission: annotation.work | annotation.review | annotation.manage
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -9603,6 +10425,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/my-rewards:
     get:
       tags:
@@ -9643,6 +10475,7 @@ paths:
       - cookieAuth: []
       x-permission: annotation.work
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -9698,6 +10531,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/review-queue:
     get:
       tags:
@@ -9729,6 +10572,7 @@ paths:
       - cookieAuth: []
       x-permission: annotation.review
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -9786,6 +10630,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/tasks/{task_id}/claim-review:
     post:
       tags:
@@ -9806,6 +10660,7 @@ paths:
         csrfToken: []
       x-permission: annotation.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '201':
           description: Created
@@ -9874,6 +10729,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/tasks/{task_id}/review:
     post:
       tags:
@@ -9897,6 +10762,7 @@ paths:
         csrfToken: []
       x-permission: annotation.review
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -10003,6 +10869,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/annotation/reviews/history:
     get:
       tags:
@@ -10048,6 +10924,7 @@ paths:
       - cookieAuth: []
       x-permission: annotation.review
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -10102,6 +10979,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/conversations:
     get:
       tags:
@@ -10116,9 +11003,15 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/ConversationStatus'
-        description: Filter.
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: dataset_id
         in: query
         required: false
@@ -10163,6 +11056,7 @@ paths:
       - cookieAuth: []
       x-permission: message.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -10220,6 +11114,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     post:
       tags:
       - Messaging
@@ -10234,6 +11138,7 @@ paths:
         csrfToken: []
       x-permission: message.self
       x-rate-limit: 30 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -10321,6 +11226,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/conversations/{conversation_id}:
     get:
       tags:
@@ -10340,6 +11255,7 @@ paths:
       - cookieAuth: []
       x-permission: message.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -10402,6 +11318,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     patch:
       tags:
       - Messaging
@@ -10421,6 +11347,7 @@ paths:
         csrfToken: []
       x-permission: message.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -10511,6 +11438,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/conversations/{conversation_id}/messages:
     get:
       tags:
@@ -10535,6 +11472,7 @@ paths:
       - cookieAuth: []
       x-permission: message.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -10596,6 +11534,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
     post:
       tags:
       - Messaging
@@ -10616,6 +11564,7 @@ paths:
         csrfToken: []
       x-permission: message.self
       x-rate-limit: 30 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -10713,6 +11662,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/conversations/{conversation_id}/read:
     post:
       tags:
@@ -10733,6 +11692,7 @@ paths:
         csrfToken: []
       x-permission: message.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -10815,6 +11775,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/conversations/{conversation_id}/attachments:
     post:
       tags:
@@ -10836,6 +11806,7 @@ paths:
         csrfToken: []
       x-permission: message.self
       x-rate-limit: 60 / h per user.
+      x-maintenance-exempt: false
       requestBody:
         required: true
         content:
@@ -10917,6 +11888,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/attachments/{attachment_id}/download-url:
     get:
       tags:
@@ -10937,6 +11918,7 @@ paths:
       - cookieAuth: []
       x-permission: message.self
       x-rate-limit: 120 / min per user (presigned URL issuance, preview redirects).
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -11005,6 +11987,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/ws:
     get:
       tags:
@@ -11019,6 +12011,7 @@ paths:
       - cookieAuth: []
       x-permission: authenticated
       x-rate-limit: 10 connection attempts / min per user; max 5 concurrent sockets per user.
+      x-maintenance-exempt: false
       responses:
         '101':
           description: Switching Protocols
@@ -11052,6 +12045,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/notifications:
     get:
       tags:
@@ -11082,6 +12085,7 @@ paths:
       - cookieAuth: []
       x-permission: profile.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -11136,6 +12140,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/notifications/unread-count:
     get:
       tags:
@@ -11149,6 +12163,7 @@ paths:
       - cookieAuth: []
       x-permission: profile.self
       x-rate-limit: 600 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -11194,6 +12209,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/notifications/{notification_id}/read:
     post:
       tags:
@@ -11214,6 +12239,7 @@ paths:
         csrfToken: []
       x-permission: profile.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '204':
           description: No Content
@@ -11268,6 +12294,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/notifications/read-all:
     post:
       tags:
@@ -11282,6 +12318,7 @@ paths:
         csrfToken: []
       x-permission: profile.self
       x-rate-limit: 120 / min per user.
+      x-maintenance-exempt: false
       responses:
         '200':
           description: OK
@@ -11327,6 +12364,16 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+        '503':
+          description: 'Service Unavailable. Error codes: `service_unavailable`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: service_unavailable, message: Service temporarily unavailable., details: {reason: maintenance}, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
   /api/v1/admin/users:
     get:
       tags:
@@ -11351,19 +12398,31 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/RoleName'
-        description: Filter.
+        description: Users holding this role (AM-05).
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/UserStatus'
-        description: Filter.
+          type: array
+          items:
+            $ref: '#/components/schemas/UserStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: verification_status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/UserVerificationStatus'
-        description: Filter.
+          type: array
+          items:
+            $ref: '#/components/schemas/UserVerificationStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `verification_status=a,b` (repeated keys also accepted).
       - name: from
         in: query
         required: false
@@ -11387,6 +12446,7 @@ paths:
       x-permission: user.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -11461,6 +12521,7 @@ paths:
       x-permission: user.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -11554,6 +12615,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -11674,6 +12736,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -11768,6 +12831,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -11888,6 +12952,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -11962,9 +13027,15 @@ paths:
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/ContributorVerificationStatus'
-        description: Default pending.
+          type: array
+          items:
+            $ref: '#/components/schemas/ContributorVerificationStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Default pending. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: q
         in: query
         required: false
@@ -11981,6 +13052,7 @@ paths:
       x-permission: user.verify
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -12058,6 +13130,7 @@ paths:
       x-permission: user.verify
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -12178,13 +13251,19 @@ paths:
         schema:
           type: string
           maxLength: 200
-        description: Case-insensitive search text.
+        description: Dataset code (`DS-YYYY-NNNNNN`, exact), title (trigram) or owner email.
       - name: status
         in: query
         required: false
+        style: form
+        explode: false
         schema:
-          $ref: '#/components/schemas/DatasetStatus'
-        description: Filter (repeatable).
+          type: array
+          items:
+            $ref: '#/components/schemas/DatasetStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter (repeatable). Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: data_class
         in: query
         required: false
@@ -12242,6 +13321,7 @@ paths:
       x-permission: dataset.read.any
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -12254,12 +13334,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedDataset'
-              example: {items: [{id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
-                      K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
-                    category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
-                    personal_data_notes: null, status: draft, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200,
-                    accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null,
-                    created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T09:15:00Z', version: 4}], page: 1, page_size: 25, total: 1}
+              example: {items: [{id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01,
+                    owner_display_name: Sophea K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers,
+                      300 dpi.', data_class: raw, category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive,
+                      scanned by me.', contains_personal_data: false, personal_data_notes: null, status: draft, version_number: 1, file_count: 2,
+                    ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200, accepted_bytes: null, earned_micros: null, license_version: CA-2026-10,
+                    takedown_reason: null, submitted_at: null, finalized_at: null, created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T09:15:00Z',
+                    version: 4}], page: 1, page_size: 25, total: 1}
         '401':
           description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
           content:
@@ -12320,6 +13401,7 @@ paths:
       x-permission: dataset.read.any
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -12332,20 +13414,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminDatasetDetail'
-              example: {dataset: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
-                    K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
-                  category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
-                  personal_data_notes: null, status: partially_approved, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0,
-                  total_bytes: 734003200, accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: null, submitted_at: null,
-                  finalized_at: null, created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T09:15:00Z', version: 4}, reviews: [{id: 01930b74-5555-7e00-8000-0000000000c1,
-                    dataset_id: 01930b71-2222-7b00-8000-0000000000d1, dataset_version_number: 1, reviewer_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f04,
-                    reviewer_name: Dara R., status: finalized, decision: partial, data_class: raw, checklist: {rights_plausible: true, matches_description: true,
-                      language_correct: true, no_unconsented_personal_data: true, no_copyright_concern: null, quality_acceptable: true, metadata_complete: true},
-                    quality_scores: {legibility: 4, completeness: 5, accuracy: null, relevance: 5, labeling_quality: null}, overall_quality: 4.67,
-                    internal_comments: Check page 12 for faded print., feedback: null, claimed_at: '2026-10-26T08:30:00Z', finalized_at: null,
-                    released_at: null, version: 2}], versions: [{version_number: 1, submitted_at: '2026-10-26T09:15:00Z', file_count: 2, total_bytes: 734003200}],
-                duplicate_flagged_files: 1, earned_micros: 367001, license: {license_version: CA-2026-10, accepted_at: '2026-10-26T08:30:00Z',
-                  accepted_ip: 203.0.113.24}}
+              example: {dataset: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01,
+                  owner_display_name: Sophea K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers,
+                    300 dpi.', data_class: raw, category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive,
+                    scanned by me.', contains_personal_data: false, personal_data_notes: null, status: partially_approved, version_number: 1,
+                  file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200, accepted_bytes: null, earned_micros: null,
+                  license_version: CA-2026-10, takedown_reason: null, submitted_at: null, finalized_at: null, created_at: '2026-10-26T08:30:00Z',
+                  updated_at: '2026-10-26T09:15:00Z', version: 4}, reviews: [{id: 01930b74-5555-7e00-8000-0000000000c1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1,
+                    dataset_version_number: 1, reviewer_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f04, reviewer_name: Dara R., status: finalized, decision: partial,
+                    data_class: raw, checklist: {rights_plausible: true, matches_description: true, language_correct: true, no_unconsented_personal_data: true,
+                      no_copyright_concern: null, quality_acceptable: true, metadata_complete: true}, quality_scores: {legibility: 4, completeness: 5,
+                      accuracy: null, relevance: 5, labeling_quality: null}, overall_quality: 4.67, internal_comments: Check page 12 for faded
+                      print., feedback: null, claimed_at: '2026-10-26T08:30:00Z', finalized_at: null, released_at: null, version: 2}], versions: [
+                  {version_number: 1, submitted_at: '2026-10-26T09:15:00Z', file_count: 2, total_bytes: 734003200}], duplicate_flagged_files: 1,
+                earned_micros: 367001, license: {license_version: CA-2026-10, accepted_at: '2026-10-26T08:30:00Z', accepted_ip: 203.0.113.24}}
         '401':
           description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
           content:
@@ -12415,6 +13497,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -12434,8 +13517,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Dataset'
-              example: {id: 01930b71-2222-7b00-8000-0000000000d1, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea K.,
-                title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
+              example: {id: 01930b71-2222-7b00-8000-0000000000d1, code: DS-2026-000123, owner_id: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f01, owner_display_name: Sophea
+                  K., title: Khmer newspaper scans 1990–1999, description: 'Scanned front pages of Phnom Penh newspapers, 300 dpi.', data_class: raw,
                 category: news, languages: [km], tags: [newspaper, ocr], source_description: 'Personal archive, scanned by me.', contains_personal_data: false,
                 personal_data_notes: null, status: taken_down, version_number: 1, file_count: 2, ready_file_count: 2, failed_file_count: 0, total_bytes: 734003200,
                 accepted_bytes: null, earned_micros: null, license_version: CA-2026-10, takedown_reason: 'Publisher claim received 2026-10-25
@@ -12539,6 +13622,7 @@ paths:
       x-permission: dataset.read.any
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '202':
           description: Accepted
@@ -12554,10 +13638,10 @@ paths:
               example: {id: 01930b72-3333-7c00-8000-0000000000f1, dataset_id: 01930b71-2222-7b00-8000-0000000000d1, parent_file_id: null, original_filename: phnom-penh-post-1994-03.pdf,
                 relative_path: 1994/phnom-penh-post-1994-03.pdf, member_path: null, extension: pdf, declared_mime: application/pdf, detected_mime: application/pdf,
                 size_bytes: 367001600, sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d, processing_status: processing,
-                scan_status: pending, scan_mode: full, failure_code: null, failure_message: null, is_container: false, page_count: 48, previews: [
-                  {page: 1, width: 1654, height: 2339, content_type: image/webp}], text_available: false, duplicates: [{kind: near, method: dhash,
-                    distance: 3, matched_file_id: null, matched_dataset_id: null, matched_previously_accepted: true, same_owner: false}], review_decision: null,
-                created_at: '2026-10-26T08:30:00Z', uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}
+                scan_status: pending, failure_code: null, failure_message: null, is_container: false, page_count: 48, previews: [{page: 1, width: 1654,
+                    height: 2339, content_type: image/webp}], text_available: false, duplicates: [{kind: near, method: dhash, distance: 3, matched_file_id: null,
+                    matched_dataset_id: null, matched_previously_accepted: true, same_owner: false}], review_decision: null, created_at: '2026-10-26T08:30:00Z',
+                uploaded_at: '2026-10-26T08:30:00Z', processed_at: '2026-10-26T09:15:00Z'}
         '401':
           description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
           content:
@@ -12605,6 +13689,264 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
               example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
                   request_id: req_01JBA7Q4M8}}
+  /api/v1/admin/takedown-requests:
+    get:
+      tags:
+      - Admin datasets
+      summary: Takedown request queue
+      operationId: get_admin_takedown_requests
+      description: Rights/privacy complaints from `POST /public/takedown-requests`, signed-in users and admins (AM-04). `q` matches requester
+        name/email/organisation and dataset code. Viewing requester contact data is audited.
+      x-sortable-fields:
+      - created_at
+      - updated_at
+      - status
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 200
+        description: Case-insensitive search text.
+      - name: status
+        in: query
+        required: false
+        style: form
+        explode: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/TakedownStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Default `received,under_review`. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
+      - name: claim_type
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/TakedownClaimType'
+        description: Filter.
+      - name: source
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/TakedownSource'
+        description: Filter.
+      - name: dataset_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Filter.
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Inclusive lower bound (created_at).
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+        description: Exclusive upper bound (created_at).
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - cookieAuth: []
+      x-permission: user.manage
+      x-rate-limit: 600 / min per user.
+      x-admin-mfa: true
+      x-maintenance-exempt: true
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTakedownCase'
+              example: {items: [{id: 01930b7f-0000-7900-8000-000000000a01, source: public_form, status: received, claim_type: copyright, dataset_id: 01930b71-2222-7b00-8000-0000000000d1,
+                    dataset_code: DS-2026-000123, dataset_status: approved, file_id: null, requester_user_id: null, requester_name: Chan Vuthy,
+                    requester_email: rights@publisher.example, requester_organization: Angkor Press Co., description: 'Pages 1–48 of this dataset
+                      are scans of our 1994 newspaper editions, reproduced without permission.', evidence_url: 'https://publisher.example/catalogue/1994',
+                    decided_by: null, decided_at: null, decision_notes: null, created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T08:30:00Z'}],
+                page: 1, page_size: 25, total: 1}
+        '401':
+          description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.not_authenticated, message: Sign in to continue., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.email_unverified, message: Verify your email address first., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: validation_error, message: One or more fields are invalid., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
+  /api/v1/admin/takedown-requests/{takedown_id}/decision:
+    post:
+      tags:
+      - Admin datasets
+      summary: Decide a takedown request
+      operationId: post_admin_takedown_requests_by_takedown_decision
+      description: 'Transitions (AM-04, LLD §12): `received → under_review`; `received|under_review → actioned|rejected`. `actioned` requires
+        the linked dataset to be `taken_down` — either already, or in the same transaction via `apply_takedown=true` (same effects as `POST /admin/datasets/{id}/takedown`:
+        review released, open annotation tasks cancelled, owner notified). `dataset_id` may (re)link the request to a dataset. The requester is
+        emailed the outcome for `actioned`/`rejected`. Audited with before/after.'
+      parameters:
+      - name: takedown_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/XRequestId'
+      security:
+      - cookieAuth: []
+        csrfToken: []
+      x-permission: user.manage
+      x-rate-limit: 120 / min per user.
+      x-admin-mfa: true
+      x-step-up-mfa: true
+      x-maintenance-exempt: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TakedownDecision'
+            example: {decision: actioned, notes: Publisher ownership verified; dataset removed., dataset_id: null, apply_takedown: true, takedown_reason_code: rights_claim}
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            RateLimit:
+              $ref: '#/components/headers/RateLimit'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TakedownCase'
+              example: {id: 01930b7f-0000-7900-8000-000000000a01, source: public_form, status: actioned, claim_type: copyright, dataset_id: 01930b71-2222-7b00-8000-0000000000d1,
+                dataset_code: DS-2026-000123, dataset_status: taken_down, file_id: null, requester_user_id: null, requester_name: Chan Vuthy,
+                requester_email: rights@publisher.example, requester_organization: Angkor Press Co., description: 'Pages 1–48 of this dataset
+                  are scans of our 1994 newspaper editions, reproduced without permission.', evidence_url: 'https://publisher.example/catalogue/1994',
+                decided_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02, decided_at: '2026-10-26T09:15:00Z', decision_notes: Publisher ownership verified;
+                  dataset removed., created_at: '2026-10-26T08:30:00Z', updated_at: '2026-10-26T09:15:00Z'}
+        '400':
+          description: 'Bad Request. Error codes: `request.malformed`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.malformed, message: The request body is not valid JSON or has the wrong shape., details: null, request_id: req_01JBA7Q4M8}}
+        '401':
+          description: 'Unauthorized. Error codes: `auth.not_authenticated`, `auth.session_expired`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.not_authenticated, message: Sign in to continue., details: null, request_id: req_01JBA7Q4M8}}
+        '403':
+          description: 'Forbidden. Error codes: `auth.email_unverified`, `auth.mfa_required`, `permission.denied`, `auth.mfa_enrollment_required`,
+            `auth.step_up_required`, `csrf.missing`, `csrf.invalid`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: auth.email_unverified, message: Verify your email address first., details: null, request_id: req_01JBA7Q4M8}}
+        '404':
+          description: 'Not Found. Error codes: `resource.not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: resource.not_found, message: Not found., details: null, request_id: req_01JBA7Q4M8}}
+        '409':
+          description: 'Conflict. Error codes: `takedown.invalid_state`, `takedown.dataset_not_taken_down`, `dataset.invalid_state`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: takedown.invalid_state, message: This takedown request has already been decided., details: null, request_id: req_01JBA7Q4M8}}
+        '413':
+          description: 'Content Too Large. Error codes: `request.payload_too_large`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.payload_too_large, message: Request body too large., details: null, request_id: req_01JBA7Q4M8}}
+        '415':
+          description: 'Unsupported Media Type. Error codes: `request.unsupported_media_type`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: request.unsupported_media_type, message: Unsupported Content-Type., details: null, request_id: req_01JBA7Q4M8}}
+        '422':
+          description: 'Unprocessable Content. Error codes: `takedown.no_target`, `validation_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: takedown.no_target, message: This request is not linked to a dataset., details: null, request_id: req_01JBA7Q4M8}}
+        '429':
+          description: 'Too Many Requests. Error codes: `rate_limited`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: rate_limited, message: Too many requests. Try again later., details: null, request_id: req_01JBA7Q4M8}}
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+        '500':
+          description: 'Internal Server Error. Error codes: `internal_error`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example: {error: {code: internal_error, message: Something went wrong. Quote the request id if you contact support., details: null,
+                  request_id: req_01JBA7Q4M8}}
   /api/v1/admin/exports:
     post:
       tags:
@@ -12612,7 +13954,8 @@ paths:
       summary: Create an export job
       operationId: post_admin_exports
       description: Only approved/partially_approved datasets and accepted files are exportable; taken_down excluded. Background `exports.build_export`
-        streams objects into ZIP parts ≤ 5 GB at `exports/{job_id}/{file}.zip`. Logged with dataset ids (audit). Expires after 7 days (A-15).
+        streams objects into ZIP parts ≤ 4 GB (4,000,000,000 bytes) at `exports/{job_id}/datahub-export-{job_id}-partNNN.zip`. The job gets a
+        human code `EX-YYYY-NNNNNN` (AM-07). Logged with dataset ids (audit). Expires after 7 days (A-15).
       parameters:
       - $ref: '#/components/parameters/XRequestId'
       security:
@@ -12622,6 +13965,7 @@ paths:
       x-rate-limit: 10 / h per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -12642,8 +13986,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExportJob'
-              example: {id: 01930b7a-bbbb-7400-8000-000000000501, status: queued, requested_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02, filters: {
-                  dataset_ids: [], categories: [news], languages: [km], min_quality: 4, data_class: null, finalized_from: null, finalized_to: null},
+              example: {id: 01930b7a-bbbb-7400-8000-000000000501, code: EX-2026-000007, status: queued, requested_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
+                filters: {dataset_ids: [], categories: [news], languages: [km], min_quality: 4, data_class: null, finalized_from: null, finalized_to: null},
                 format: zip_originals, include_metadata: true, include_annotations: true, progress_percent: 0, dataset_count: 0, file_count: 0,
                 total_bytes: 0, files: [], error: null, created_at: '2026-10-26T08:30:00Z', started_at: null, completed_at: null, expires_at: null}
         '400':
@@ -12716,12 +14060,25 @@ paths:
       x-sortable-fields:
       - created_at
       parameters:
-      - name: status
+      - name: q
         in: query
         required: false
         schema:
-          $ref: '#/components/schemas/ExportStatus'
-        description: Filter.
+          type: string
+          maxLength: 200
+        description: Export code (`EX-YYYY-NNNNNN`) or note text.
+      - name: status
+        in: query
+        required: false
+        style: form
+        explode: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExportStatus'
+          minItems: 1
+          uniqueItems: true
+        description: Filter. Comma-separated list, e.g. `status=a,b` (repeated keys also accepted).
       - name: requested_by
         in: query
         required: false
@@ -12738,6 +14095,7 @@ paths:
       x-permission: dataset.export
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -12750,10 +14108,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedExportJob'
-              example: {items: [{id: 01930b7a-bbbb-7400-8000-000000000501, status: completed, requested_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
+              example: {items: [{id: 01930b7a-bbbb-7400-8000-000000000501, code: EX-2026-000007, status: completed, requested_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
                     filters: {dataset_ids: [], categories: [news], languages: [km], min_quality: 4, data_class: null, finalized_from: null, finalized_to: null},
                     format: zip_originals, include_metadata: true, include_annotations: true, progress_percent: 100, dataset_count: 12, file_count: 1840,
-                    total_bytes: 48318382080, files: [{id: 01930b7a-bbbb-7400-8000-000000000502, name: datahub-export-01930b7a-part-001.zip, size_bytes: 4831838208,
+                    total_bytes: 48318382080, files: [{id: 01930b7a-bbbb-7400-8000-000000000502, name: datahub-export-01930b7a-part-001.zip, size_bytes: 3998712041,
                         sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d}], error: null, created_at: '2026-10-26T08:30:00Z',
                     started_at: '2026-10-26T08:30:00Z', completed_at: '2026-10-26T09:15:00Z', expires_at: '2026-11-02T09:15:00Z'}], page: 1, page_size: 25,
                 total: 1}
@@ -12816,6 +14174,7 @@ paths:
       x-permission: dataset.export
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -12828,10 +14187,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExportJob'
-              example: {id: 01930b7a-bbbb-7400-8000-000000000501, status: completed, requested_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02, filters: {
-                  dataset_ids: [], categories: [news], languages: [km], min_quality: 4, data_class: null, finalized_from: null, finalized_to: null},
+              example: {id: 01930b7a-bbbb-7400-8000-000000000501, code: EX-2026-000007, status: completed, requested_by: 01930b6e-8f2a-7c41-9a0e-5b7d2c1e4f02,
+                filters: {dataset_ids: [], categories: [news], languages: [km], min_quality: 4, data_class: null, finalized_from: null, finalized_to: null},
                 format: zip_originals, include_metadata: true, include_annotations: true, progress_percent: 100, dataset_count: 12, file_count: 1840,
-                total_bytes: 48318382080, files: [{id: 01930b7a-bbbb-7400-8000-000000000502, name: datahub-export-01930b7a-part-001.zip, size_bytes: 4831838208,
+                total_bytes: 48318382080, files: [{id: 01930b7a-bbbb-7400-8000-000000000502, name: datahub-export-01930b7a-part-001.zip, size_bytes: 3998712041,
                     sha256: 9f2c4d1e8b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d}], error: null, created_at: '2026-10-26T08:30:00Z',
                 started_at: '2026-10-26T08:30:00Z', completed_at: '2026-10-26T09:15:00Z', expires_at: '2026-11-02T09:15:00Z'}
         '401':
@@ -12901,6 +14260,7 @@ paths:
       x-permission: dataset.export
       x-rate-limit: 120 / min per user (presigned URL issuance, preview redirects).
       x-admin-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -13025,6 +14385,7 @@ paths:
       x-permission: analytics.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -13097,7 +14458,7 @@ paths:
         schema:
           type: string
           format: uuid
-        description: Filter.
+        description: Only rows written by this actor (AM-05).
       - name: action
         in: query
         required: false
@@ -13111,14 +14472,14 @@ paths:
         schema:
           type: string
           maxLength: 50
-        description: Filter.
+        description: Entity table/type, e.g. `dataset`, `payout_request`, `user` (AM-05).
       - name: entity_id
         in: query
         required: false
         schema:
           type: string
           maxLength: 64
-        description: Filter.
+        description: Entity id (UUID); combine with entity_type for an entity's history (AM-05).
       - name: request_id
         in: query
         required: false
@@ -13149,6 +14510,7 @@ paths:
       x-permission: audit.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -13257,6 +14619,7 @@ paths:
       x-permission: audit.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -13325,6 +14688,7 @@ paths:
       x-permission: settings.manage
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -13395,6 +14759,7 @@ paths:
       x-rate-limit: 120 / min per user.
       x-admin-mfa: true
       x-step-up-mfa: true
+      x-maintenance-exempt: true
       requestBody:
         required: true
         content:
@@ -13509,6 +14874,7 @@ paths:
       x-permission: user.read
       x-rate-limit: 600 / min per user.
       x-admin-mfa: true
+      x-maintenance-exempt: true
       responses:
         '200':
           description: OK
@@ -13761,6 +15127,28 @@ components:
       enum:
       - approve
       - request_changes
+    TakedownClaimType:
+      type: string
+      enum:
+      - copyright
+      - privacy
+      - illegal_content
+      - consent_withdrawn
+      - other
+    TakedownStatus:
+      type: string
+      enum:
+      - received
+      - under_review
+      - actioned
+      - rejected
+      - withdrawn
+    TakedownSource:
+      type: string
+      enum:
+      - public_form
+      - user
+      - admin
     PayoutStatus:
       type: string
       enum:
@@ -15028,6 +16416,10 @@ components:
         id:
           type: string
           format: uuid
+        code:
+          type: string
+          pattern: ^DS-[0-9]{4}-[0-9]{6}$
+          description: Human reference `DS-YYYY-NNNNNN` (AM-07). Unique, immutable; display/search only — URLs and foreign keys use `id`.
         owner_id:
           type: string
           format: uuid
@@ -15088,6 +16480,7 @@ components:
           type: integer
       required:
       - id
+      - code
       - owner_id
       - title
       - data_class
@@ -15270,15 +16663,6 @@ components:
           $ref: '#/components/schemas/FileProcessingStatus'
         scan_status:
           $ref: '#/components/schemas/ScanStatus'
-        scan_mode:
-          type:
-          - string
-          - 'null'
-          enum:
-          - full
-          - windowed
-          - null
-          description: windowed = file > 2,000,000,000 bytes scanned in overlapping windows (ClamAV single-file limit); flagged to reviewers.
         failure_code:
           anyOf:
           - $ref: '#/components/schemas/FileFailureCode'
@@ -15949,6 +17333,10 @@ components:
         dataset_id:
           type: string
           format: uuid
+        dataset_code:
+          type: string
+          pattern: ^DS-[0-9]{4}-[0-9]{6}$
+          description: Human reference `DS-YYYY-NNNNNN` (AM-07). Unique, immutable; display/search only — URLs and foreign keys use `id`.
         title:
           type: string
         owner_display_name:
@@ -16350,6 +17738,10 @@ components:
         id:
           type: string
           format: uuid
+        code:
+          type: string
+          pattern: ^PO-[0-9]{4}-[0-9]{6}$
+          description: Human reference `PO-YYYY-NNNNNN` (AM-07). Unique, immutable; display/search only — URLs and foreign keys use `id`.
         user_id:
           type: string
           format: uuid
@@ -16425,6 +17817,7 @@ components:
           type: integer
       required:
       - id
+      - code
       - user_id
       - amount_micros
       - currency
@@ -18018,6 +19411,182 @@ components:
       - reason_code
       - reason
       additionalProperties: false
+    TakedownClaimCreate:
+      type: object
+      properties:
+        requester_name:
+          type: string
+          minLength: 2
+          maxLength: 200
+        requester_email:
+          type: string
+          maxLength: 254
+          format: email
+        requester_organization:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+        claim_type:
+          $ref: '#/components/schemas/TakedownClaimType'
+        dataset_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Dataset code (`DS-YYYY-NNNNNN`) or UUID, if known.
+        file_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 1024
+          description: File name or id within the dataset, if known.
+        description:
+          type: string
+          minLength: 20
+          maxLength: 10000
+        evidence_url:
+          type:
+          - string
+          - 'null'
+          maxLength: 2048
+          format: uri
+        sworn_statement:
+          type: boolean
+          const: true
+          description: Requester confirms the notice is accurate and they are the rights holder / person concerned or authorised to act for them.
+        website:
+          type: string
+          maxLength: 0
+          description: Honeypot; must be empty. Non-empty → silently dropped with 202.
+      required:
+      - requester_name
+      - requester_email
+      - claim_type
+      - description
+      - sworn_statement
+      additionalProperties: false
+    TakedownCase:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          $ref: '#/components/schemas/TakedownSource'
+        status:
+          $ref: '#/components/schemas/TakedownStatus'
+        claim_type:
+          $ref: '#/components/schemas/TakedownClaimType'
+        dataset_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        dataset_code:
+          type:
+          - string
+          - 'null'
+          pattern: ^DS-[0-9]{4}-[0-9]{6}$
+          description: Human reference `DS-YYYY-NNNNNN` (AM-07). Unique, immutable; display/search only — URLs and foreign keys use `id`.
+        dataset_status:
+          anyOf:
+          - $ref: '#/components/schemas/DatasetStatus'
+          - type: 'null'
+        file_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        requester_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        requester_name:
+          type: string
+        requester_email:
+          type: string
+        requester_organization:
+          type:
+          - string
+          - 'null'
+        description:
+          type: string
+        evidence_url:
+          type:
+          - string
+          - 'null'
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decision_notes:
+          type:
+          - string
+          - 'null'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - source
+      - status
+      - claim_type
+      - requester_name
+      - requester_email
+      - description
+      - created_at
+      - updated_at
+      description: A `takedown_requests` row (DATABASE_SCHEMA §4.7.6). Requester contact data is visible to `user.manage` holders only.
+    TakedownDecision:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+          - under_review
+          - actioned
+          - rejected
+        notes:
+          type: string
+          minLength: 5
+          maxLength: 5000
+          description: Stored in decision_notes; sent to the requester for actioned/rejected.
+        dataset_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        apply_takedown:
+          type: boolean
+          default: false
+          description: 'With decision=actioned: also take the linked dataset down in the same transaction (same effects as POST /admin/datasets/{id}/takedown).'
+        takedown_reason_code:
+          type:
+          - string
+          - 'null'
+          enum:
+          - rights_claim
+          - personal_data
+          - illegal_content
+          - policy_violation
+          - owner_request
+          - other
+          - null
+      required:
+      - decision
+      - notes
+      additionalProperties: false
     ExportFilters:
       type: object
       properties:
@@ -18106,6 +19675,10 @@ components:
         id:
           type: string
           format: uuid
+        code:
+          type: string
+          pattern: ^EX-[0-9]{4}-[0-9]{6}$
+          description: Human reference `EX-YYYY-NNNNNN` (AM-07). Unique, immutable; display/search only — URLs and foreign keys use `id`.
         status:
           $ref: '#/components/schemas/ExportStatus'
         requested_by:
@@ -18160,6 +19733,7 @@ components:
           format: date-time
       required:
       - id
+      - code
       - status
       - requested_by
       - filters
@@ -18701,6 +20275,17 @@ components:
             type: array
             items:
               $ref: '#/components/schemas/Adjustment'
+        required:
+        - items
+    PaginatedTakedownCase:
+      allOf:
+      - $ref: '#/components/schemas/PaginationMeta'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/TakedownCase'
         required:
         - items
     PaginatedRewardWithTotals:

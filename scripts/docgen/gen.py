@@ -6,8 +6,10 @@ from schemas import build, paginated
 from errors import ERRORS
 from endpoints import EP
 
-OUT = "/home/kanasaga/learn/DataHub/docs/04-backend-api"
-FRAG = "/home/kanasaga/.hermes/cache/scratch/dh_api/frag"
+import os as _os
+HERE = _os.path.dirname(_os.path.abspath(__file__))
+OUT = _os.path.normpath(_os.path.join(HERE, "..", "..", "docs", "04-backend-api"))
+FRAG = _os.path.join(HERE, "frag")
 PREFIX = "/api/v1"
 
 RL = OrderedDict([
@@ -15,7 +17,7 @@ RL = OrderedDict([
     ("public", "60 / min per IP."),
     ("contact", "5 / h per IP."),
     ("auth_register", "5 / h per IP."),
-    ("auth_login", "5 / min per (IP + email) and 20 / min per IP; account lockout after 10 consecutive failures (15 min)."),
+    ("auth_login", "5 / min per (IP + email) and 20 / min per IP; account lockout after 5 failures within 15 min (locked 15 min)."),
     ("auth_mfa", "5 / min per session and 20 / h per user; 10 consecutive failures revoke the MFA-pending session."),
     ("auth_token", "10 / h per IP (verify-email, reset-password)."),
     ("auth_resend", "3 / h per user."),
@@ -49,6 +51,12 @@ def op_id(e):
 
 def path_params(p):
     return re.findall(r"{([a-z_]+)}", p)
+
+MAINT_EXEMPT_PREFIXES = ("/healthz", "/readyz", "/metrics", "/auth/", "/admin/")
+
+def maintenance_exempt(e):
+    """AM-06: with maintenance_mode on, every non-admin call gets 503; health, auth and admin endpoints keep working."""
+    return e["p"].startswith(MAINT_EXEMPT_PREFIXES) or e["admin"]
 
 def all_errors(e):
     codes = list(e["err"])
@@ -87,6 +95,8 @@ def all_errors(e):
         codes.append("rate_limited")
     if a != "internal":
         codes.append("internal_error")
+    if not maintenance_exempt(e):
+        codes.append("service_unavailable")
     seen, out = set(), []
     for c in codes:
         if c not in ERRORS:
@@ -177,7 +187,13 @@ def build_openapi():
                 sch = {"type": "string", "format": "uuid"}
             params.append({"name": pp, "in": "path", "required": True, "schema": sch})
         for (n, sch, d) in e["q"]:
-            params.append({"name": n, "in": "query", "required": False, "schema": sch, "description": d})
+            if n == "status" or n.endswith("_status"):
+                # AM-05: every status filter accepts comma-separated values (repeated keys are also accepted).
+                params.append({"name": n, "in": "query", "required": False, "style": "form", "explode": False,
+                               "schema": {"type": "array", "items": sch, "minItems": 1, "uniqueItems": True},
+                               "description": (d + " " if d else "") + "Comma-separated list, e.g. `" + n + "=a,b` (repeated keys also accepted)."})
+            else:
+                params.append({"name": n, "in": "query", "required": False, "schema": sch, "description": d})
         if e["paged"]:
             params += [{"$ref": "#/components/parameters/Page"}, {"$ref": "#/components/parameters/PageSize"}, {"$ref": "#/components/parameters/Sort"}]
             if e["sort"]:
@@ -200,6 +216,7 @@ def build_openapi():
             op["x-admin-mfa"] = True
         if e["step"]:
             op["x-step-up-mfa"] = True
+        op["x-maintenance-exempt"] = maintenance_exempt(e)
         if e["body"]:
             ct = "application/json" if e["ct"] == "json" else "multipart/form-data"
             media = {"schema": {"$ref": f"#/components/schemas/{e['body']}"}}
@@ -238,10 +255,11 @@ def build_openapi():
         for st, codes in by_status(all_errors(e)).items():
             if e["p"] == "/readyz" and st == 503:
                 continue
+            det = {"reason": "maintenance"} if codes[0] == "service_unavailable" else None
             r = {"description": STATUS_TEXT[st] + ". Error codes: " + ", ".join(f"`{c}`" for c in codes),
                  "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
-                                                  "example": flowify({"error": {"code": codes[0], "message": ERRORS[codes[0]][1], "details": None, "request_id": "req_01JBA7Q4M8"}})}}}
-            if st == 429:
+                                                  "example": flowify({"error": {"code": codes[0], "message": ERRORS[codes[0]][1], "details": det, "request_id": "req_01JBA7Q4M8"}})}}}
+            if st in (429, 503):
                 r["headers"] = {"Retry-After": {"$ref": "#/components/headers/RetryAfter"}}
             resps[str(st)] = r
         op["responses"] = resps
@@ -254,7 +272,7 @@ def build_openapi():
                 "Admin datasets": "Dataset administration and takedown.", "Exports": "Background dataset exports.", "Admin": "Analytics, audit, settings, roles."}
     doc = OrderedDict()
     doc["openapi"] = "3.1.0"
-    doc["info"] = {"title": "DataHub API", "version": "1.0.0",
+    doc["info"] = {"title": "DataHub API", "version": "1.1.0",
                    "summary": "Data marketplace & annotation platform API (documentation baseline).",
                    "description": ("Canonical contract per docs/ENGINEERING_BASELINE.md §12. All paths are under `/api/v1`; JSON (UTF-8) bodies; "
                                    "errors use `{\"error\":{\"code\",\"message\",\"details\",\"request_id\"}}`. Money fields are integer micro-USD (`*_micros`), "
@@ -310,6 +328,8 @@ def md_endpoints():
             out.append(f"#### `{e['m']} {PREFIX}{e['p']}` — {e['sum']}\n")
             out.append(f"- **Access:** {perm_label(e)}")
             out.append(f"- **Rate limit:** {RL[e['rl']]}")
+            if maintenance_exempt(e) and e["auth"] != "internal":
+                out.append("- **Maintenance mode:** exempt — keeps working while `maintenance_mode` is on (AM-06).")
             hdr = []
             if e["idem"]: hdr.append(f"`Idempotency-Key` ({e['idem']})")
             if e["ifm"]: hdr.append(f"`If-Match` ({e['ifm']})")
@@ -399,7 +419,7 @@ if __name__ == "__main__":
     D.add_representer(OrderedDict, lambda d, o: d.represent_dict(o.items()))
     D.ignore_aliases = lambda self, data: True
     with open(f"{OUT}/openapi.yaml", "w") as f:
-        f.write("# DataHub OpenAPI 3.1 specification — Document control: v1.0, 2026-10-26, Baseline.\n")
+        f.write("# DataHub OpenAPI 3.1 specification — Document control: v1.1, 2026-10-26, Baseline (§16 amendments applied).\n")
         f.write("# Canonical source: docs/ENGINEERING_BASELINE.md §12. Human-readable companion: API_DOCUMENTATION.md.\n")
         yaml.dump(doc, f, Dumper=D, sort_keys=False, allow_unicode=True, width=140)
     eps, n = md_endpoints()

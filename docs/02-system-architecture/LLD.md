@@ -5,12 +5,12 @@
 | Field | Value |
 |---|---|
 | Document | `docs/02-system-architecture/LLD.md` (mandatory document #9) |
-| Version | v1.0 |
+| Version | v1.1 (baseline §16 amendments AM-01…AM-10, AM-14 applied) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | CTO role (backend architecture) |
-| Canonical source | `docs/ENGINEERING_BASELINE.md` v1.0 — the baseline wins on conflict |
-| Companion documents | `DATABASE_SCHEMA.md` v1.0 (table/column contract), `ERD.md` v1.0, `HLD.md`, `SDD.md`, `docs/04-backend-api/API_DOCUMENTATION.md` |
+| Canonical source | `docs/ENGINEERING_BASELINE.md` v1.1 (incl. §16 amendments) — the baseline wins on conflict |
+| Companion documents | `DATABASE_SCHEMA.md` v1.1 (table/column contract), `ERD.md` v1.1, `HLD.md`, `SDD.md`, `docs/04-backend-api/API_DOCUMENTATION.md` |
 | Change control | Signature or transaction-boundary changes require an update here in the same pull request; behavioural changes are recorded in `DECISION_LOG.md`. |
 
 ## Purpose
@@ -33,7 +33,7 @@ Specify the internal design of the FastAPI modular monolith (`apps/api`, package
 | A-10 | (baseline) Scanning is fail-closed. |
 | A-LLD-01 | Handlers are synchronous (`def`), executed in Starlette's threadpool; only the WebSocket endpoint is `async` (baseline §3). |
 | A-LLD-02 | Isolation level is PostgreSQL default `READ COMMITTED`; correctness for money and state transitions comes from explicit row locks (`SELECT … FOR UPDATE`), guarded `UPDATE … WHERE status = …`, unique constraints and advisory locks — not from `SERIALIZABLE`. |
-| A-LLD-03 | ClamAV cannot scan a single stream larger than ~4 GB (clamd `StreamMaxLength`/`MaxScanSize` ceiling). Setting `clamd_max_scan_bytes` (default 4,000,000,000) caps the effective single-file size; see D-LLD-07. |
+| A-LLD-03 | clamd cannot scan a single stream ≥ 4 GiB (`StreamMaxLength`/`MaxScanSize` ceiling). Baseline AM-01 therefore fixes the per-file limit (`max_file_bytes`) at 4,000,000,000 bytes for uploads and extracted ZIP members; see D-LLD-07. |
 
 ## Decisions
 
@@ -45,7 +45,7 @@ Specify the internal design of the FastAPI modular monolith (`apps/api`, package
 | D-LLD-04 | **Global lock order** inside a transaction: `users` → `datasets` → `dataset_reviews` → `annotation_projects` → `annotation_tasks` → `annotation_reviews` → `payout_requests` → `wallets` (ascending `id` if several of one kind) → content-hash advisory locks (ascending hash). | Deadlock avoidance; every service in this document respects it. |
 | D-LLD-05 | State transitions are implemented as **guarded updates** (`UPDATE … SET status = :to WHERE id = :id AND status = ANY(:from) RETURNING …`) or after `SELECT … FOR UPDATE`; a zero-row result raises `InvalidStateTransition` (HTTP 409). Transition tables live in one place per module (`models.py` constant `<ENTITY>_TRANSITIONS`). | Concurrency-safe and auditable. |
 | D-LLD-06 | Errors are raised as `core.errors.AppError` subclasses and rendered by one exception handler into the baseline envelope `{"error":{"code","message","details","request_id"}}`. | Uniform client handling. |
-| D-LLD-07 | Upload init rejects files larger than `min(max_file_bytes, clamd_max_scan_bytes)`; with defaults the effective single-file limit is 4.0 GB (decimal) instead of 5 GB, because a file that cannot be scanned can never be accepted (A-10). Raising the limit requires a scanner that supports larger streams; to be recorded in `DECISION_LOG.md` as an amendment of baseline §7 upload limits. | Fail-closed scanning is non-negotiable; contributors learn the limit before uploading rather than after. |
+| D-LLD-07 | Upload init and archive expansion reject files/members larger than `max_file_bytes` (default and maximum 4,000,000,000 bytes — baseline AM-01, `DECISION_LOG.md` D-014); every object is scanned whole (no windowed scan), because a file that cannot be scanned can never be accepted (A-10). The settings validator refuses values above 4,000,000,000. | Fail-closed scanning is non-negotiable; contributors learn the limit before uploading rather than after. |
 | D-LLD-08 | Finance credit functions receive **typed input DTOs** from the calling module (e.g. `DatasetEarningInputs`) instead of reading review/annotation tables. | Respects the module table-ownership rule (baseline §4) and D-LLD-02. |
 
 ## Dependencies
@@ -92,6 +92,7 @@ apps/api/src/datahub/
 │   ├── realtime.py            # Redis pub/sub publisher (sync) for WebSocket fan-out
 │   ├── pagination.py          # PageParams, Page[T], sort parsing
 │   ├── idempotency.py         # Idempotency-Key header dependency
+│   ├── codes.py               # human reference codes DS-/PO-/EX-YYYY-NNNNNN (AM-07)
 │   └── logging.py             # structlog config, request-id middleware, Sentry init
 └── modules/
     └── <module>/
@@ -127,7 +128,7 @@ Module-specific extra files are listed in each module section (e.g. `processing/
 | messaging | `conversations`, `conversation_participants`, `messages`, `message_attachments`, `notifications`, `email_outbox` |
 | exports | `export_jobs`, `export_files` |
 | admin | `system_settings`, `takedown_requests` |
-| core | `audit_logs` (via `core.audit`), `background_job_records` (via `core.jobs`) |
+| core | `audit_logs` (via `core.audit`), `background_job_records` (via `core.jobs`), `dataset_code_counters` (via `core.codes`, AM-07) |
 
 ---
 
@@ -138,10 +139,11 @@ Middleware order (outermost first) in `main.create_app()`:
 1. `RequestIdMiddleware` — reads `X-Request-ID` (if from trusted proxy and matches `^[A-Za-z0-9-]{8,64}$`) else generates UUIDv7; binds to structlog contextvars; echoes header.
 2. `SecurityHeadersMiddleware` — `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cache-Control: no-store` on `/api/*`.
 3. `ProxyHeadersMiddleware` — client IP from `X-Forwarded-For` only when the peer is in `TRUSTED_PROXY_CIDRS`.
-4. `CSRFMiddleware` (§3.7).
-5. `BodySizeLimitMiddleware` — 1 MiB for JSON; 10 MiB for attachment/proof multipart routes; uploads never pass through the API (presigned S3).
-6. Routers (all under `/api/v1`), with dependencies: `get_db` → `get_current_actor` → `require_permission(...)` → `rate_limit(...)`.
-7. Exception handlers (§3.3).
+4. `MaintenanceModeMiddleware` (baseline AM-06) — when runtime setting `maintenance_mode` is true, every request whose path is not under `/healthz`, `/readyz`, `/metrics`, `/api/v1/auth/`, `/api/v1/admin/` and is not one of the admin-MFA routes (route flag `admin_mfa=True`, e.g. `/pricing-rules`, annotation project management) is answered `503 service_unavailable` with `details.reason="maintenance"` and `Retry-After: 300`; WebSocket upgrades are refused the same way. Reads the setting through `runtime` (cache TTL ≤ 60 s).
+5. `CSRFMiddleware` (§3.7).
+6. `BodySizeLimitMiddleware` — 1 MiB for JSON; 10 MiB for attachment/proof multipart routes; uploads never pass through the API (presigned S3).
+7. Routers (all under `/api/v1`), with dependencies: `get_db` → `get_current_actor` → `require_permission(...)` → `rate_limit(...)`.
+8. Exception handlers (§3.3).
 
 `/healthz` (process alive), `/readyz` (DB `SELECT 1`, Redis `PING`, S3 `HeadBucket`, clamd `PING` — each with 2 s timeout) and `/metrics` are mounted outside `/api/v1`; `/metrics` is served only when the request arrives on the internal network (Caddy does not route it publicly).
 
@@ -182,9 +184,14 @@ class Settings(BaseSettings):
     SUPPORT_INBOX_EMAIL: EmailStr
     SECRET_KEY: SecretStr                         # ≥ 32 bytes; HMAC for CSRF tokens
     FIELD_ENCRYPTION_KEYS: list[SecretStr]        # Fernet keys; first encrypts, all decrypt
-    SESSION_ABSOLUTE_TTL_HOURS: int = 168
-    SESSION_IDLE_TTL_MINUTES: int = 720
-    ADMIN_SESSION_IDLE_TTL_MINUTES: int = 30
+    SESSION_ABSOLUTE_TTL_HOURS: int = 720          # 30 days (AM-08)
+    SESSION_IDLE_TTL_MINUTES: int = 10080          # 7 days (AM-08)
+    ADMIN_SESSION_ABSOLUTE_TTL_HOURS: int = 12     # sessions of users holding admin/super_admin (AM-08)
+    ADMIN_SESSION_IDLE_TTL_MINUTES: int = 30       # (AM-08)
+    STEP_UP_TTL_MINUTES: int = 15                  # finance/privileged step-up window (AM-08)
+    LOGIN_LOCK_THRESHOLD: int = 5                  # failures within LOGIN_LOCK_WINDOW_MINUTES (AM-08)
+    LOGIN_LOCK_WINDOW_MINUTES: int = 15
+    LOGIN_LOCK_MINUTES: int = 15
     ADMIN_MFA_REQUIRED: bool = True
     COOKIE_SECURE: bool = True
     TRUSTED_PROXY_CIDRS: list[IPvAnyNetwork] = []
@@ -316,7 +323,7 @@ def get_current_actor(request: Request, db: Session = Depends(get_db)) -> Actor
 def get_optional_actor(...) -> Actor | None
 ```
 
-`get_current_actor`: read cookie `dh_session` → the registered authenticator (`register_authenticator(fn)` is called once by `main.create_app()` with `identity.service.authenticate_session`, so `core` never imports a module; `authenticate_token(db, raw_token)` exposes the same check to the WebSocket endpoint) → checks `revoked_at IS NULL`, `expires_at > now()`, idle timeout (`last_seen_at` + idle TTL; admin roles use `ADMIN_SESSION_IDLE_TTL_MINUTES`), user `status IN ('pending_email','active')`; touches `last_seen_at` at most once per 60 s (separate short transaction). Users in `pending_email` receive `AccountRestricted` except on the allow-list `{GET /auth/me, POST /auth/logout, POST /auth/verify-email, POST /auth/resend-verification, GET /auth/csrf}`. Sessions of MFA users with `mfa_verified_at IS NULL` are restricted to `{GET /auth/me, POST /auth/mfa/verify, POST /auth/logout}`. Permissions = union of `roles.permissions` for the user's roles, cached in Redis `perm:{user_id}` (TTL 300 s, busted on role change).
+`get_current_actor`: read cookie `dh_session` → the registered authenticator (`register_authenticator(fn)` is called once by `main.create_app()` with `identity.service.authenticate_session`, so `core` never imports a module; `authenticate_token(db, raw_token)` exposes the same check to the WebSocket endpoint) → checks `revoked_at IS NULL`, `expires_at > now()`, idle timeout (`last_seen_at` + idle TTL; sessions of users holding admin/super_admin use `ADMIN_SESSION_IDLE_TTL_MINUTES` = 30 and an absolute limit of `created_at + ADMIN_SESSION_ABSOLUTE_TTL_HOURS` = 12 h, evaluated per request so a role grant shortens existing sessions — AM-08), user `status IN ('pending_email','active')`; touches `last_seen_at` at most once per 60 s (separate short transaction). Users in `pending_email` receive `AccountRestricted` except on the allow-list `{GET /auth/me, POST /auth/logout, POST /auth/verify-email, POST /auth/resend-verification, GET /auth/csrf}`. Sessions of MFA users with `mfa_verified_at IS NULL` are restricted to `{GET /auth/me, POST /auth/mfa/verify, POST /auth/logout}`. Permissions = union of `roles.permissions` for the user's roles, cached in Redis `perm:{user_id}` (TTL 300 s, busted on role change).
 
 ### 3.6 Permissions — `core/permissions.py`
 
@@ -548,7 +555,22 @@ class Page(BaseModel, Generic[T]):
 
 def idempotency_key(required: bool) -> Callable[..., str | None]
     """Reads 'Idempotency-Key' header: 8–128 chars, ^[A-Za-z0-9_\-:.]+$; missing and required → ValidationFailed."""
+
+def multi_value(enum_cls: type[StrEnum]) -> Callable[..., list[StrEnum] | None]
+    """AM-05: every `status`/`*_status` filter accepts comma-separated values (`?status=a,b`) and repeated keys; values validated against the enum."""
 ```
+
+List filters added by AM-05: `UserFilters.role` (`GET /admin/users`), `PayoutAdminFilters.user_id` (`GET /admin/payouts`), `AuditFilters.entity_type`, `.entity_id`, `.actor_id` (`GET /admin/audit-logs`).
+
+### 3.16 Human reference codes — `core/codes.py` (AM-07)
+
+```python
+def next_code(db: Session, prefix: Literal["DS", "PO", "EX"], now: datetime) -> str
+    """Joins the caller's tx: INSERT … ON CONFLICT (prefix, year) DO UPDATE SET last_value = last_value + 1 RETURNING last_value
+    on dataset_code_counters; returns f"{prefix}-{year}-{n:06d}" (e.g. DS-2026-000123)."""
+```
+
+Called by `datasets.create_dataset` (`datasets.code`), `finance.request_payout` (`payout_requests.code`) and `exports.create_export` (`export_jobs.code`) inside their insert transaction. Codes are immutable, shown in the UI, matched exactly by admin `q` searches, and never used in URLs (UUIDs only).
 
 
 ---
@@ -668,7 +690,7 @@ def user_ids_with_permission(db, permission: str) -> list[UUID]           # e.g.
 
 | Operation | Transaction | Locks / guards |
 |---|---|---|
-| `register` | 1 tx: insert `users`, `user_profiles`, `user_roles(contributor)`, `agreement_acceptances` (ToS, privacy), `email_verifications`, `email_outbox`, audit | `uq_users_email`; to prevent account enumeration an already-registered email gets the same 201 response, no row is created and an "account already exists" email is sent instead (a race on the unique index is handled the same way) |
+| `register` | 1 tx: insert `users`, `user_profiles`, `user_roles(contributor)`, `agreement_acceptances` (ToS, privacy), `email_verifications`, `email_outbox`, audit | `uq_users_email`; to prevent account enumeration an already-registered email gets the same `202 Accepted` response (AM-14; no session is created for anyone — the user signs in after verifying), no row is created and an "account already exists" email is sent instead (a race on the unique index is handled the same way) |
 | `login` | tx A: read user, verify password (argon2 outside lock), update counters / create `user_sessions` + `security_events`, audit | `SELECT users … FOR UPDATE` only when updating counters; lockout via `locked_until` |
 | `verify_email` | 1 tx | `SELECT email_verifications … FOR UPDATE` by `token_hash`; guarded `UPDATE users SET status='active' WHERE status='pending_email'` |
 | `reset_password` | 1 tx: consume token, set hash, revoke all sessions (`password_reset`), security event, outbox "password changed" | token row `FOR UPDATE` |
@@ -682,10 +704,10 @@ def user_ids_with_permission(db, permission: str) -> list[UUID]           # e.g.
 ### 4.5 Login algorithm
 
 1. Rate-limit (`login`); normalise email; load user (constant-time dummy argon2 verify when not found).
-2. If `locked_until > now()` → 401 `unauthenticated` (generic) + `security_events.login_failed` (`details.reason="locked"`).
-3. Wrong password → `failed_login_count += 1`; at 10 → `locked_until = now() + 15 min`, `account_locked` event; generic 401.
+2. If `locked_until > now()` → `429 auth.account_locked` with `Retry-After` (password not verified) + `security_events.login_failed` (`details.reason="locked"`).
+3. Wrong password → `failed_login_count += 1` (counter window `LOGIN_LOCK_WINDOW_MINUTES` = 15, reset when the first failure in the window is older); at `LOGIN_LOCK_THRESHOLD` = 5 → `locked_until = now() + LOGIN_LOCK_MINUTES` (15 min), `account_locked` event + email; generic `401 auth.invalid_credentials` (AM-08).
 4. Status `suspended|deactivated|anonymized` → generic 401 + `login_blocked_status`.
-5. Success → reset counters, rehash if needed, create session (`expires_at = now() + SESSION_ABSOLUTE_TTL_HOURS`), set cookie `dh_session` (HttpOnly, Secure, SameSite=Lax, Path=/), rotate CSRF.
+5. Success → reset counters, rehash if needed, create session (`expires_at = now() + SESSION_ABSOLUTE_TTL_HOURS`, or `+ ADMIN_SESSION_ABSOLUTE_TTL_HOURS` when the user holds admin/super_admin), set cookie `dh_session` (HttpOnly, Secure, SameSite=Lax, Path=/), rotate CSRF.
 6. If `mfa_enabled` → response `{mfa_required: true}`; if user holds admin/super_admin and not `mfa_enabled` and `ADMIN_MFA_REQUIRED` → `{mfa_setup_required: true}` (session restricted to MFA setup endpoints until enabled).
 
 ### 4.6 Tasks
@@ -784,7 +806,7 @@ def lock_dataset(db, dataset_id: UUID) -> Dataset                               
 | `DatasetPatchIn` | same fields optional; header `If-Match: <lock_version>` required |
 | `SubmitIn` | `rights_declaration: Literal[True]`; `rights_declaration_version` = current; `change_note ≤ 2000` (required on resubmission) |
 | `WithdrawIn` | `reason ≤ 1000` |
-| `UploadInitIn` | `filename` 1–255 (NFC; strip path separators, control chars; reserved names rejected); `size_bytes: int` 1 … `min(max_file_bytes, clamd_max_scan_bytes)`; `declared_mime ≤ 255`; `relative_path ≤ 1024` (normalised, no `..`, no leading `/`); `client_fingerprint` `^[a-f0-9]{64}$` optional |
+| `UploadInitIn` | `filename` 1–255 (NFC; strip path separators, control chars; reserved names rejected); `size_bytes: int` 1 … `max_file_bytes` (≤ 4,000,000,000, AM-01); `declared_mime ≤ 255`; `relative_path ≤ 1024` (normalised, no `..`, no leading `/`); `client_fingerprint` `^[a-f0-9]{64}$` optional |
 | `PartUrlsIn` | `part_numbers: list[int]` 1–100 items, each 1…`part_count`, unique |
 | `CompleteIn` | `parts: list[{part_number 1–10000, etag 1–128}]` covering exactly 1…`part_count`, ascending |
 | `TakedownIn` | `reason` 10–2000; `takedown_request_id: UUID | None`; `notify_owner: bool = True` |
@@ -853,7 +875,7 @@ def sanitize_member_path(name: str) -> str | None                               
 1. **Claim** (tx 1): `datasets.service.claim_file_for_processing` — `UPDATE dataset_files SET processing_status='processing', processing_started_at=now(), processing_attempts=processing_attempts+1 WHERE id=:id AND processing_status='uploaded' RETURNING …`. No row → exit (already processed / being processed). Commit.
 2. **Stage** (no tx): stream object to `WORKER_SCRATCH_DIR/<file_id>/original` (noexec volume, deleted in `finally`), computing SHA-256 and size; size must equal `size_bytes` else result `failed/size_mismatch`.
 3. **Sniff**: `core.sniffer.sniff`; not ok → `failed/<failure_code>`.
-4. **Scan** (not for ZIP containers): `run_scan` with `max_bytes = clamd_max_scan_bytes`. `infected` → copy object to `quarantine/<file_id>`, delete original key, result `quarantined/infected` with signature; `error` → transient retry (step 8); `error` with `scan_size_limit` → `failed/scan_size_limit`.
+4. **Scan** (not for ZIP containers): `run_scan` with `max_bytes = max_file_bytes` (≤ 4,000,000,000; whole-object scan, AM-01). `infected` → copy object to `quarantine/<file_id>`, delete original key, result `quarantined/infected` with signature; `error` → transient retry (step 8); `error` with `scan_size_limit` → `failed/scan_size_limit`.
 5. **Derivatives**: page images (PDF ≤ 500 pages via pypdfium2 at 150 DPI, long edge ≤ 2048 px; TIFF frames; images → WebP ≤ 4096 px), thumbnail, extracted text (PDF text layer, DOCX/ODT/RTF/TXT; first 1 MB stored as `text.txt` derivative, full text used only for SimHash), CSV/XLSX first 200 rows → JSON table, ZIP member list → JSON. Upload derivatives with `storage.put_file`.
 6. **Persist** (tx 2): `record_processing_result` — guarded `processing → ready|failed|quarantined`; set `sha256`, `format`, `detected_mime`, `scan_*`, `page_count`, flags, `text_object_key`, `simhash`, `phash`, `extracted_metadata`, `processed_at`; replace `file_previews` rows; if quarantined → `security_events.file_quarantined` + notify admins; audit `processing.file.processed`. If every file of the dataset is now terminal → notification `dataset_processing_finished` (dedupe key `dataset:{id}:processing_finished:{current_version_no}:{count_terminal}`). After commit: enqueue `detect_duplicates(file_id)` when ready; enqueue `expand_archive(file_id)` for ZIP containers.
 7. Cleanup scratch dir.
@@ -875,10 +897,10 @@ def sanitize_member_path(name: str) -> str | None                               
 3. Near (image): `phash` Hamming ≤ 6 → `method='phash'`.
 4. Upsert key `(file_id, matched_file_id, kind)`; idempotent.
 
-### 6.5 `sweep_stalled` (beat every 10 min)
+### 6.5 `sweep_stalled` (beat every 10 min; files stuck in `processing` only)
 
 - `processing` rows with `processing_started_at < now() − 45 min` → guarded back to `uploaded` and re-enqueued (if `processing_attempts ≥ 4` → `failed/processing_error`).
-- `uploaded` rows with `updated_at < now() − 10 min` and no in-flight `background_job_records` → re-enqueue `process_file` (covers lost after-commit enqueues).
+- Lost after-commit enqueues of `uploaded` files are handled by `datahub.admin.requeue_stalled` (§12.3, AM-10).
 
 ### 6.6 `scan_aux_object`
 
@@ -940,7 +962,7 @@ def release_active_review_for_dataset(db, dataset_id: UUID, actor: Actor | None,
 
 | Operation | Tx | Locks / guards |
 |---|---|---|
-| `claim_review` | 1 tx | `datasets.lock_dataset` (FOR UPDATE); dataset `submitted`; actor ≠ owner; insert review (`in_progress`, `dataset_version_id` = current version, `data_class_declared`); `datasets.mark_in_review`; `uq_dataset_reviews_one_active` turns a concurrent double-claim into 409 `conflict` (`already_claimed`) |
+| `claim_review` | 1 tx | `datasets.lock_dataset` (FOR UPDATE); dataset `submitted`; actor ≠ owner; actor's `in_progress` dataset reviews < `review_max_active_claims` (default 5, AM-09) else `409 review.claim_limit_reached`; insert review (`in_progress`, `dataset_version_id` = current version, `data_class_declared`); `datasets.mark_in_review`; `uq_dataset_reviews_one_active` turns a concurrent double-claim into 409 `conflict` (`already_claimed`) |
 | `set_file_decision(s)` | 1 tx | review `FOR UPDATE` (serialises with finalize); review `in_progress`, `reviewer_id = actor`; file ∈ version file set, reviewable (`ready`, not container, not removed); upsert on `uq_dataset_file_reviews_review_id_file_id` |
 | `update_review` | 1 tx | review `FOR UPDATE`; `lock_version` match; upsert `dataset_quality_scores` on `(review_id, dimension)` |
 | `finalize_review` | **1 tx** spanning review, datasets, finance, messaging, audit | read review → `datasets.lock_dataset` → review `FOR UPDATE` → (finance) user wallet `FOR UPDATE` → content advisory locks; `SET LOCAL lock_timeout = '5s'` |
@@ -1081,12 +1103,12 @@ class AnnotationRewardInputs(BaseModel): annotation_review_id: UUID; task_id: UU
 1. `key = f"dataset_review:{review_id}:earning"`; if `find_journal(key)` or `earning_records` exist for `(dataset_review, review_id)` → return the existing result (replay).
 2. `set_local_lock_timeout(5000)`; `wallet = get_or_create_user_wallet(beneficiary)`; `lock_user_wallet`.
 3. `rule = get_rate_in_force(data_class, finalized_at)`.
-4. Sort files by `sha256`; `advisory_xact_lock("content", sha256.hex())` for each distinct hash (ascending → no deadlock between concurrent finalizations sharing content).
+4. Sort files by `content_sha256` (lower-case hex); `SELECT pg_advisory_xact_lock(hashtext(:content_sha256))` for each distinct hash in ascending order (baseline AM-03; ascending → no deadlock between concurrent finalizations sharing content), **then** re-check eligibility (step 5) under the locks.
 5. For each file: duplicate within this submission (hash already seen) → 0 `duplicate_in_submission`. Else query paid records for the hash (`amount_micros > 0`, `source_type='dataset_review'`):
-   - none → `amount = earning_for(accepted_bytes, rule.rate)`; 0 → `zero_reason='rounding'`.
-   - base payment exists, no upgrade yet, `labeled_upgrade` ticked, `labeled_upgrade_enabled`, `data_class='labeled'`, `base.rate_micros_per_gb < rule.rate` → `is_labeled_upgrade=True`, `previously_paid_rate = base.rate`, `amount = earning_for(bytes, rule.rate − base.rate)`.
+   - none → `pricing_tier = data_class` (`raw`|`labeled`), `amount = earning_for(accepted_bytes, rule.rate)`; 0 → `zero_reason='rounding'`.
+   - base payment exists at tier `raw`, no `labeled_upgrade` row yet, `labeled_upgrade` ticked, `labeled_upgrade_enabled`, `data_class='labeled'`, `base.rate_micros_per_gb < rule.rate` → `pricing_tier='labeled_upgrade'`, `previously_paid_rate = base.rate`, `amount = earning_for(bytes, rule.rate − base.rate)`.
    - otherwise → 0 `already_paid`.
-6. `total = Σ amount`. Insert `earning_records` (one per file). The partial unique indexes `uq_earning_records_sha256_*` make any race that slipped past step 4 fail the whole transaction (retried by the client with the same idempotency key).
+6. `total = Σ amount`. Insert `earning_records` (one per file). Each record stores `content_sha256` and `pricing_tier`; the partial unique index `uq_earning_records_content_tier_paid (content_sha256, pricing_tier) WHERE amount_micros > 0` (AM-03) makes any race that slipped past step 4 fail the whole transaction (retried by the client with the same idempotency key).
 7. If `total > 0`: `bucket = 'pending' if earning_hold_days > 0 else 'available'`; `post_journal(kind='dataset_earning', key, source=('dataset_review', review_id), lines=[(user, bucket, +total), (system_dataset_purchases, main, −total)])`; set `journal_id`, `credited_bucket`, `hold_until` on the records.
 8. Return `(journal, EarningSummary(total, payable_bytes, pricing_rule_id))`.
 
@@ -1122,7 +1144,7 @@ class AnnotationRewardInputs(BaseModel): annotation_review_id: UUID; task_id: UU
 
 | Task | Queue | Trigger | Design |
 |---|---|---|---|
-| `datahub.finance.release_pending` | default | beat hourly (minute 5) | `release_pending_earnings`: select ≤ 100 distinct `dataset_review_id` with `credited_bucket='pending' AND released_at IS NULL AND hold_until ≤ now()`; per review its own tx: `lock_user_wallet`; `post_journal(kind='earning_release', key=f"dataset_review:{review_id}:release", lines=[(user,pending,−X),(user,available,+X)])`; update records `released_at`, `release_journal_id`; notify `earnings_released`. Idempotent by journal key + `released_at IS NULL` guard. Retries ×3. |
+| `datahub.finance.release_pending` | default | beat hourly (minute 5) | `release_pending_earnings`: select ≤ 100 `earning_records` (dataset earnings **and** annotation rewards, AM-02) with `credited_bucket='pending' AND released_at IS NULL AND hold_until ≤ now()` `FOR UPDATE SKIP LOCKED`; per record its own tx: `lock_user_wallet`; `post_journal(kind='earning_release', key=f"earning_release:{earning_record_id}", source=('earning_record', id), lines=[(user,pending,−X),(user,available,+X)])`; update the record's `released_at`, `release_journal_id`; notify `earnings_released`. Idempotent by journal key + `released_at IS NULL` guard. Retries ×3. |
 | `datahub.finance.reconcile` | default | beat nightly 01:30 UTC | read-only: (1) per user wallet and bucket Σ lines = cached column; (2) every journal Σ = 0 and amount = Σ positives; (3) Σ `reserved` lines per user = Σ amount of payouts in `requested|approved`; (4) Σ `paid` = Σ amount `paid` − reversed payouts; (5) Σ all `system_dataset_purchases` lines = −Σ `dataset_earning` journals amount. Report → Redis `finance:reconciliation:last` (TTL 8 d) and `audit_logs` (`finance.reconcile.run`, metadata summary). Mismatch → log `error`, Sentry event, in-app notification to super_admins. Never writes to the ledger. Time limit 1,800 s. |
 
 ---
@@ -1199,14 +1221,15 @@ def approved_annotations_for_export(db, dataset_ids: list[UUID]) -> Iterator[Exp
 | Operation | Tx | Locks / guards |
 |---|---|---|
 | `generate_tasks` | 1 tx per 1,000 tasks | project `FOR UPDATE`; project `draft|active` (draft → active, `activated_at`); accepted files via `review.accepted_file_ids_for_datasets`; annotatable files via `datasets.list_annotatable_files`; `INSERT … ON CONFLICT ON CONSTRAINT uq_annotation_tasks_project_id_file_id_page_number DO NOTHING` |
-| `assign_task` | 1 tx | task `FOR UPDATE`; status `unassigned` (or `assigned|in_progress` = reassign: end current assignment `reassigned`); annotator: `annotation.work`, `active`, `verification_status='approved'` (A-08), `annotator_agreement` accepted; `uq_annotation_assignments_one_active` |
+| `assign_task` | 1 tx | task `FOR UPDATE`; status `unassigned` (or `assigned|in_progress` = reassign: end current assignment `reassigned`); annotator: `annotation.work`, `active`, `verification_status='approved'` (A-08), `annotator_agreement` accepted, and `user_profiles.privacy_trained = true` when the task's dataset has `contains_personal_data` (AM-09); `uq_annotation_assignments_one_active` |
 | `save_draft` | 1 tx | task row read `FOR SHARE` (blocks concurrent unassign/submit); actor is active assignee; task `in_progress` (auto-transition from `assigned`/`changes_requested`); optimistic: `UPDATE annotations SET data, content_sha256, version = version + 1, last_saved_at = now(), last_editor_id, last_assignment_id WHERE task_id = :t AND version = :if_match RETURNING version`; 0 rows → `VersionConflict` with server copy; first save (`if_match = 0`) → INSERT (unique `task_id`). If hash changed → insert `annotation_versions(kind='draft')`. Autosaves are not written to `audit_logs` (content history lives in `annotation_versions`); the implicit status transition on the first save is audited. |
 | `submit_task` | 1 tx | task `FOR UPDATE`; `in_progress`; assignee; `annotations.version = if_match`; completeness validation; insert `annotation_versions(kind='submitted')`; `review_round += 1`; task → `submitted` |
-| `claim_annotation_review` | 1 tx | task `FOR UPDATE`; `submitted`; actor ≠ author of the submitted version; insert review (`uq_annotation_reviews_one_active`); task → `in_review` |
+| `claim_annotation_review` | 1 tx | task `FOR UPDATE`; `submitted`; actor ≠ author of the submitted version; insert review with `review_kind='primary'` (`uq_annotation_reviews_one_active`); task → `in_review` |
+| QA sampling (AM-09) | 1 tx (inside `review_annotation` approve path) | with probability `annotation_qa_sample_rate` (default 0.10, deterministic `hash(task_id) mod 1000`) an approved task gets a second `annotation_reviews` row `review_kind='qa'`, `status='in_progress'` offered to a different reviewer; a QA review only records score/comments (feeds quality metrics) and never changes the task status or reward; released/cancelled claims set `status='cancelled'` |
 | `review_annotation` | **1 tx** incl. finance | task `FOR UPDATE` → review `FOR UPDATE` → (finance) annotator wallet `FOR UPDATE`; review `in_progress` and reviewer = actor; replay: if review already `completed` with same decision → return stored result |
-| `close_project` | 1 tx | project `FOR UPDATE`; bulk guarded update of non-approved tasks → `cancelled`; end active assignments (`cancelled`); in-progress reviews → `cancelled` |
+| `close_project` | 1 tx | project `FOR UPDATE`; bulk guarded update of non-approved tasks → `cancelled`; end active assignments (`cancelled`); in-progress reviews (primary and QA) → `cancelled` |
 
-`review_annotation` approve path: review → `completed` (decision, score, comments); task → `approved`, `approved_at`; active assignment → `ended/approved`; `finance.credit_annotation_reward(db, review.id, actor, AnnotationRewardInputs(...page_count=task.page_count))` with key `annotation_review:{review_id}:reward`, lines `annotator.available +X`, `system_annotation_labor.main −X` (skipped when X = 0, earning record with `zero_reason='zero_rate'`); insert `annotation_rewards` (`uq_annotation_rewards_annotation_review_id`, `uq_annotation_rewards_task_id`); notifications `annotation_approved` and `earnings_credited`. Request-changes path: review → `completed`; insert `annotation_feedback`; task → `changes_requested`, `current_reviewer_id = NULL`; notify `annotation_returned`.
+`review_annotation` approve path: review → `completed` (decision, score, comments); task → `approved`, `approved_at`; active assignment → `ended/approved`; `finance.credit_annotation_reward(db, review.id, actor, AnnotationRewardInputs(...page_count=task.page_count))` with key `annotation_review:{review_id}:reward`, lines `annotator.available +X` (or `annotator.pending +X` with `hold_until` on the earning record when `earning_hold_days > 0` — same hold rule as dataset earnings, AM-02), `system_annotation_labor.main −X` (skipped when X = 0, earning record with `zero_reason='zero_rate'`); insert `annotation_rewards` (`uq_annotation_rewards_annotation_review_id`, `uq_annotation_rewards_task_id`); notifications `annotation_approved` and `earnings_credited`. Request-changes path: review → `completed`; insert `annotation_feedback`; task → `changes_requested`, `current_reviewer_id = NULL`; notify `annotation_returned`.
 
 Annotation compensation is kept separate from dataset purchase price by using a distinct journal kind and system wallet (`system_annotation_labor`).
 
@@ -1360,11 +1383,12 @@ Layout: `router.py` (`/admin/datasets` search, `/admin/datasets/{id}/takedown`, 
 | `GET /admin/audit-logs` | `audit_logs` | `audit.read` | `list_audit_logs(db, filters, page)` (actor, action prefix, entity, date range) |
 | `GET /admin/settings` | `list_settings` | `settings.manage` | `list_settings(db)` |
 | `PUT /admin/settings/{key}` | `put_setting` | `settings.manage` | `update_setting(db, actor, key, data.value)` |
-| `GET /admin/takedown-requests` *(supplementary S-01)* | `list_takedowns` | `user.manage` | `list_takedown_requests(db, filters, page)` |
-| `POST /admin/takedown-requests/{id}/decision` *(S-01)* | `decide_takedown` | `user.manage` | `decide_takedown_request(db, actor, request_id, data)` (`actioned` requires a performed dataset takedown) |
+| `GET /admin/takedown-requests` (AM-04) | `list_takedowns` | `user.manage` | `list_takedown_requests(db, filters, page)` (status — comma-separated, claim_type, source, dataset_id, q, date range) |
+| `POST /admin/takedown-requests/{id}/decision` (AM-04; step-up) | `decide_takedown` | `user.manage` | `decide_takedown_request(db, actor, request_id, data)` (`actioned` requires the dataset to be `taken_down`, or `apply_takedown=true` which calls `take_down_dataset` in the same tx) |
+| `POST /public/takedown-requests` (AM-04; no login, rate `public_contact` 5/h/IP) | `public_takedown` | — | `submit_takedown_request(db, data, ctx)` → `takedown_requests` row `source='public_form'`, `received`; acknowledgement email; notify `user.manage` holders |
 | `POST /public/contact` | `public_contact` | rate `public_contact` | `submit_public_contact(db, data, ctx)` |
 
-S-01: the two takedown-request endpoints are not in baseline §12; they are required to operate `takedown_requests` and must be added to the API documentation/OpenAPI and recorded in `DECISION_LOG.md`.
+The three takedown-request endpoints were adopted by baseline AM-04 (`DECISION_LOG.md` D-017) and are specified in `API_DOCUMENTATION.md` / `openapi.yaml`.
 
 ### 12.2 Service interface
 
@@ -1377,6 +1401,8 @@ def list_settings(db) -> list[SettingOut]
 def update_setting(db, actor: Actor, key: str, value: Any) -> SettingOut
 def list_takedown_requests(db, filters, page) -> Page[TakedownRequestOut]
 def decide_takedown_request(db, actor: Actor, request_id: UUID, data: TakedownDecisionIn) -> TakedownRequest
+def submit_takedown_request(db, data: TakedownClaimIn, ctx: RequestContext) -> None
+def requeue_stalled(db, now: datetime) -> RequeueReport
 def submit_public_contact(db, data: ContactIn, ctx: RequestContext) -> None
 def process_deletion_request(db, request_id: UUID) -> DeletionOutcome
 def purge_retention(db, now: datetime) -> RetentionReport
@@ -1384,7 +1410,7 @@ def purge_retention(db, now: datetime) -> RetentionReport
 
 `take_down_dataset` (1 tx): `datasets.take_down_dataset` (status, licence revocation, upload aborts) → `review.release_active_review_for_dataset(..., reason="taken_down")` → `annotation.cancel_tasks_for_dataset` → linked `takedown_requests` → `actioned` → `messaging.notify(owner, "dataset_taken_down", email=True)` → audit. Lock order: dataset → review → annotation tasks.
 
-`update_setting` validates against `SETTINGS_REGISTRY: dict[str, SettingSpec(value_type, validator)]`, e.g. `min_withdrawal_micros`: int, multiple of 10,000, ≥ 10,000, ≤ `max_withdrawal_micros`; `earning_hold_days`: 0–90; `payout_dual_approval_threshold_micros`: multiple of 10,000, ≥ 0; `max_file_bytes`: 1 MB … 5 GB; `clamd_max_scan_bytes`: ≤ 4,000,000,000; `extra_allowed_extensions`: ≤ 20 items `^[a-z0-9]{1,10}$`, never one of the deny-listed executable/script/HTML/SVG/macro extensions; `dataset_categories`: removal refused while datasets use the category. Unknown keys → 404. After commit `runtime.invalidate(key)`; audit with before/after.
+`update_setting` validates against `SETTINGS_REGISTRY: dict[str, SettingSpec(value_type, validator)]`, e.g. `min_withdrawal_micros`: int, multiple of 10,000, ≥ 10,000, ≤ `max_withdrawal_micros`; `earning_hold_days`: 0–90; `payout_dual_approval_threshold_micros`: multiple of 10,000, ≥ 0; `max_file_bytes`: 1,000,000 … 4,000,000,000 (AM-01); `maintenance_mode`: bool (AM-06); `review_max_active_claims`: 1–50; `annotation_qa_sample_rate`: number 0–1; `legal_docs_approved`: bool, only super_admin, audited (AM-09); `extra_allowed_extensions`: ≤ 20 items `^[a-z0-9]{1,10}$`, never one of the deny-listed executable/script/HTML/SVG/macro extensions; `dataset_categories`: removal refused while datasets use the category. Unknown keys → 404. After commit `runtime.invalidate(key)`; audit with before/after.
 
 `ContactIn`: `name` 2–200, `email`, `topic: general|support|copyright|privacy|illegal_content|consent_withdrawn`, `message` 20–10,000, optional `dataset_reference` (UUID), honeypot field `website` must be empty. Effects: `email_outbox` to `SUPPORT_INBOX_EMAIL`; for the four rights topics a `takedown_requests` row (`source='public_form'`, `received`) and in-app notification to `user.manage` holders.
 
@@ -1394,7 +1420,8 @@ def purge_retention(db, now: datetime) -> RetentionReport
 
 | Task | Queue | Trigger | Design |
 |---|---|---|---|
-| `datahub.retention.purge` | default | beat daily 02:30 UTC | executes the `DATABASE_SCHEMA.md` §7.3 matrix rule by rule; each rule processes batches of ≤ 5,000 rows per transaction, deleting objects **before** rows (`storage.delete_many`; failed keys keep their rows for the next run); audit-log purge uses `SET LOCAL datahub.audit_purge='on'`; writes a summary to `audit_logs` (`admin.retention.purge`). Idempotent by construction (predicates select only expired data). Soft time limit 3,000 s; resumes next day. |
+| `datahub.retention.purge` | default | beat daily 02:30 UTC | executes the `DATABASE_SCHEMA.md` §7.3 matrix rule by rule, skipping anything under `legal_hold` (datasets/users, AM-09); each rule processes batches of ≤ 5,000 rows per transaction, deleting objects **before** rows (`storage.delete_many`; failed keys keep their rows for the next run); audit-log purge uses `SET LOCAL datahub.audit_purge='on'`; writes a summary to `audit_logs` (`admin.retention.purge`). Idempotent by construction (predicates select only expired data). Soft time limit 3,000 s; resumes next day. |
+| `datahub.admin.requeue_stalled` | default | beat every 5 min (AM-10) | `requeue_stalled(db, now)`: re-enqueues `messaging.send_email` for `email_outbox` rows `pending` > 2 min, `processing.process_file` for `dataset_files` `uploaded` > 5 min with no in-flight `background_job_records`, `exports.build_export` for `export_jobs` `queued` > 5 min. Read + enqueue only (every target task is status-guarded); counts logged and exported as metrics. |
 | `datahub.admin.process_deletion_requests` | default | beat daily 03:00 UTC | for due requests call `process_deletion_request` (each isolated; failures logged and retried next day) |
 
 ### 12.4 Admin read-only joins
@@ -1415,7 +1442,8 @@ All tasks subclass `DataHubTask` (§3.13): `acks_late`, idempotent, recorded in 
 | `datahub.processing.scan_aux_object(kind, id)` | processing | processing | attachment/proof/KYC upload | scan-status guard (`pending` only) | ×3; soft 300 s |
 | `datahub.processing.sweep_stalled` | processing | processing | beat 10 min | status guards | none (next run) |
 | `datahub.uploads.expire_sessions` | datasets | default | beat 15 min | status guard; S3 `NoSuchUpload` ignored | none (next run) |
-| `datahub.finance.release_pending` | finance | default | beat hourly | journal key `dataset_review:{id}:release` + `released_at IS NULL` | ×3 |
+| `datahub.finance.release_pending` | finance | default | beat hourly | journal key `earning_release:{earning_record_id}` (AM-02) + `released_at IS NULL` | ×3 |
+| `datahub.admin.requeue_stalled` | admin | default | beat 5 min (AM-10) | target tasks are status-guarded; duplicate enqueue harmless | none (next run) |
 | `datahub.finance.reconcile` | finance | default | beat nightly 01:30 | read-only + alert | ×1; soft 1,800 s |
 | `datahub.messaging.send_email(outbox_id)` | messaging | email | outbox insert | outbox status guard | internal backoff up to 8 attempts |
 | `datahub.messaging.dispatch_outbox` | messaging | email | beat 1 min | status guard | none |
