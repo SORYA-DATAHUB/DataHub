@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document ID | DH-ARCH-SDD |
-| Version | 1.0 |
+| Version | 1.1 (baseline §16 AM-01, AM-02, AM-03, AM-06, AM-10 applied) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | CTO role |
@@ -191,7 +191,7 @@ sequenceDiagram
     else document, image or data file
         W->>S3: GetObject stream in 8 MiB chunks
         W->>W: sha256 incremental
-        W->>CL: INSTREAM same chunks
+        W->>CL: INSTREAM same chunks, whole object, size at most 4000000000 bytes
         CL-->>W: OK or FOUND or error
         alt FOUND
             W->>S3: copy to quarantine prefix and delete original
@@ -211,7 +211,7 @@ sequenceDiagram
     W->>R: PUBLISH notification.created
 ```
 
-Archive expansion (`processing.expand_archive`): reads the central directory first and rejects if members > 10,000, Σ uncompressed > 20 GB, any member ratio > 100:1, absolute paths, `..`, symlinks or device entries. Each accepted member is streamed (decompressed with a byte counter that aborts at the declared size + 1) into `datasets/{dataset_id}/files/{file_id}/members/{member_file_id}` and inserted as a `dataset_files` row with `parent_file_id` and `member_path` (unique pair → rerun-safe), status `uploaded`, then `processing.process_file` is enqueued for it. Nested ZIP members are inserted as `failed: nested_archive`. The container itself ends `ready` with `scan_status=skipped_container` and is never payable.
+Archive expansion (`processing.expand_archive`): reads the central directory first and rejects if members > 10,000, Σ uncompressed > 20 GB, any member ratio > 100:1, absolute paths, `..`, symlinks or device entries; a member whose uncompressed size exceeds `max_file_bytes` (4,000,000,000 B, AM-01) is not extracted and is recorded `failed: archive_limit_exceeded`. Each accepted member is streamed (decompressed with a byte counter that aborts at the declared size + 1) into `datasets/{dataset_id}/files/{file_id}/members/{member_file_id}` and inserted as a `dataset_files` row with `parent_file_id` and `member_path` (unique pair → rerun-safe), status `uploaded`, then `processing.process_file` is enqueued for it. Nested ZIP members are inserted as `failed: nested_archive`. The container itself is hashed but not scanned: it ends `ready` with `scan_status=skipped_container` and is never payable; every member is scanned whole on its own (AM-01 — there is no windowed scanning).
 
 `processing.detect_duplicates`: exact = same `sha256` as any file in another dataset whose review decision was `accepted` (or in the same dataset) → `dataset_duplicates(kind=exact)`; near = same normalised-text SimHash within distance 3 or same perceptual image hash → `kind=near` for reviewer attention. Upsert on `(file_id, matched_file_id, kind)`.
 
@@ -273,9 +273,10 @@ sequenceDiagram
     RS->>FS: credit_dataset_earning review_id, actor
     FS->>DB: SELECT pricing_rules effective at now for data_class
     FS->>DB: SELECT accepted files with processing ready, scan clean, not container
+    FS->>DB: pg_advisory_xact_lock hashtext content_sha256 for each distinct hash in sorted order
     loop each accepted file
         FS->>DB: check dataset_duplicates exact against previously accepted files
-        FS->>DB: check earning_records for same sha256 already paid
+        FS->>DB: recheck earning_records for same content_sha256 already paid, under the lock
         alt never paid
             FS->>FS: earning equals floor of accepted_bytes times rate over 1e9
         else paid at raw, dataset labeled, labeled_upgrade ticked
@@ -283,7 +284,7 @@ sequenceDiagram
         else already paid or exact duplicate
             FS->>FS: earning 0 with reason
         end
-        FS->>DB: INSERT earning_records unique source_type, source_id, file_id, pricing rule version
+        FS->>DB: INSERT earning_records with content_sha256 and pricing_tier, unique source_type, source_id, file_id and unique content_sha256, pricing_tier where amount above 0
     end
     alt total greater than 0
         FS->>DB: INSERT ledger_journals kind dataset_earning, key dataset_review REVIEW_ID earning, ON CONFLICT DO NOTHING
@@ -299,8 +300,8 @@ sequenceDiagram
     Note over DB: deferred trigger at COMMIT verifies sum of lines per journal equals 0
 ```
 
-- Bucket: `available` when `earning_hold_days = 0` (A-07 default), else `pending` with `release_at`. `finance.release_pending` (hourly) posts `earning_release` journals (user.pending −X, user.available +X) keyed `earning_release:{source_journal_id}`.
-- Annotation rewards follow the same pattern with kind `annotation_reward`, key `annotation_review:{review_id}:reward`, system wallet `system_annotation_labor` (§7).
+- Bucket: `available` when `earning_hold_days = 0` (A-07 default), else `pending` with `earning_records.hold_until = finalized_at + earning_hold_days`. `finance.release_pending` (hourly) posts one `earning_release` journal per matured earning record (user.pending −X, user.available +X) keyed `earning_release:{earning_record_id}` (baseline AM-02).
+- Annotation rewards follow the same pattern — including the hold rule (`pending` + `hold_until` when `earning_hold_days > 0`, AM-02) — with kind `annotation_reward`, key `annotation_review:{review_id}:reward`, system wallet `system_annotation_labor` (§7).
 - Adjustments (`POST /admin/adjustments`, `finance.adjust`, super_admin) post `adjustment_credit|adjustment_debit` keyed `adjustment:{adjustment_id}`; debits cannot drive `available` negative.
 - All amounts are Python `int` micro-USD; display rounds down to cents.
 
@@ -447,7 +448,7 @@ sequenceDiagram
     end
 ```
 
-Crash window between COMMIT and enqueue: the outbox row stays `pending`. Recovery is a periodic sweep `admin.requeue_stalled` (beat every 5 min) that re-enqueues `email_outbox` rows `pending` for > 2 min, `dataset_files` stuck in `uploaded` for > 10 min, and `export_jobs` `queued` for > 10 min. Because every target task is guarded by status, a duplicate enqueue is harmless. This sweep is a **proposed amendment to baseline §13** and must be recorded in `DECISION_LOG.md` before implementation. Duplicate SMTP delivery is possible only if the worker dies after SMTP accept and before the status update; the stable `Message-ID` lets receiving providers de-duplicate.
+Crash window between COMMIT and enqueue: the outbox row stays `pending`. Recovery is a periodic sweep `admin.requeue_stalled` (beat every 5 min) that re-enqueues `email_outbox` rows `pending` for > 2 min, `dataset_files` stuck in `uploaded` for > 5 min, and `export_jobs` `queued` for > 5 min. Because every target task is guarded by status, a duplicate enqueue is harmless. The sweep was adopted as baseline amendment AM-10 (`DECISION_LOG.md` D-023). Duplicate SMTP delivery is possible only if the worker dies after SMTP accept and before the status update; the stable `Message-ID` lets receiving providers de-duplicate.
 
 ## 9. Error recovery
 
@@ -482,8 +483,10 @@ Crash window between COMMIT and enqueue: the outbox row stays `pending`. Recover
 |---|---|
 | Two withdrawals spending the same balance | `SELECT … FROM wallets WHERE id = :id FOR UPDATE` before balance check; partial unique index one open payout per user; CHECK `available ≥ 0` on cached balance |
 | Duplicate earnings on retried finalize | Review row `FOR UPDATE` + status guard; `earning_records (source_type, source_id, file_id)` unique; `ledger_journals.idempotency_key` unique |
+| Same content paid twice by concurrent finalizations of different datasets | `pg_advisory_xact_lock(hashtext(content_sha256))` per file in sorted order before the eligibility recheck; partial unique index `earning_records (content_sha256, pricing_tier) WHERE amount_micros > 0` (AM-03) |
+| Pending earnings released twice | One `earning_release` journal per earning record, key `earning_release:{earning_record_id}` (AM-02) + `released_at IS NULL` guard |
 | Deadlock between wallets | Lock all wallets touched by a journal in ascending `wallets.id` order |
-| Two reviewers claiming the same dataset | `datasets` row `FOR UPDATE` + guard `status = 'submitted'` |
+| Two reviewers claiming the same dataset | `datasets` row `FOR UPDATE` + guard `status = 'submitted'`; per-reviewer cap `review_max_active_claims` (AM-09) |
 | Double approval by same admin | `payout_approvals (payout_id, approver_id)` unique |
 | Two `mark-paid` calls | `payout_records.payout_id` unique + status guard `approved` |
 | Concurrent annotation saves | Optimistic locking: `If-Match` version, conditional UPDATE, 409 with server copy (ADR-0011) |

@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | ADR | ADR-0005 |
-| Version | 1.0 |
+| Version | 1.1 (amended by baseline AM-01, AM-13) |
 | Date | 2026-10-26 |
 | Status | Accepted (2026-10-26) |
 | Document status | Baseline |
@@ -29,7 +29,7 @@ Accepted — 2026-10-26.
 
 ## Context
 
-DataHub stores up to 20 TB in year 1 (A-03) with files up to 5 GB, and needs private buckets, multipart uploads, presigned URLs and lifecycle rules. MASTER Part 6 suggests MinIO for local development, but MinIO community container images are no longer freely distributed, so a different S3-compatible server is needed for dev/CI.
+DataHub stores up to 20 TB in year 1 (A-03) with files up to 4 GB (4,000,000,000 bytes, baseline AM-01), and needs private buckets, multipart uploads, presigned URLs and lifecycle rules. MASTER Part 6 suggests MinIO for local development, but MinIO community container images are no longer freely distributed, so a different S3-compatible server is needed for dev/CI.
 
 ## Decision
 
@@ -54,4 +54,4 @@ Use the S3 API exclusively through `core.storage` (boto3). Development and CI ru
 ## Consequences
 
 - Bucket CORS must expose `ETag`; lifecycle rule aborts incomplete multipart uploads after 1 day and expires `exports/` after 7 days.
-- Production bucket versioning enabled for RPO of object data.
+- Object-data RPO (baseline AM-13, `DECISION_LOG.md` D-026): on AWS S3 enable bucket versioning plus a lifecycle rule expiring noncurrent versions after 30 days. Cloudflare R2 has no versioning, so on R2 a nightly `rclone sync` copies `datahub-private` to a separate backup bucket (different provider/account, separate credentials) and keeps deleted/overwritten objects for 30 days.

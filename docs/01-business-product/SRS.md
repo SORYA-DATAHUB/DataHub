@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document | SRS: Software Requirements Specification (mandatory doc #3) |
-| Version | 1.0 |
+| Version | 1.1 (baseline §16 amendments AM-01…AM-14 applied; new IDs appended, none renumbered) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | Business Analyst / Solution Architect |
@@ -28,7 +28,7 @@
 - Annotation project lifecycle `draft → active → closed`.
 - Review/annotation score scale 1–5.
 - The error-code catalogue in §9.
-- Export parts ≤ 5 GB each.
+- Export parts ≤ 4 GB (4,000,000,000 bytes) each.
 
 **Dependencies.** BRD.md (BR-01 … BR-34), PRD.md, ENGINEERING_BASELINE.md §§1–15. Consumers: USER_STORIES.md, PRICING_PAYOUT_POLICY.md, SAD/HLD/LLD/SDD, DATABASE_SCHEMA.md, API_DOCUMENTATION.md, openapi.yaml, AUTH_AUTHORIZATION.md, FILE_UPLOAD_STORAGE.md, DATA_QUALITY_REVIEW.md, TEST_PLAN.md, TEST_CASES.md, SECURITY_REQUIREMENTS.md, REQUIREMENTS_TRACEABILITY.md.
 
@@ -71,14 +71,14 @@
 | Functional | DS: datasets & file access | FR-DS-01 … FR-DS-14 | 14 |
 | Functional | UPL: uploads | FR-UPL-01 … FR-UPL-12 | 12 |
 | Functional | PROC: processing | FR-PROC-01 … FR-PROC-13 | 13 |
-| Functional | REV: dataset review | FR-REV-01 … FR-REV-14 | 14 |
-| Functional | FIN: pricing, earnings, ledger | FR-FIN-01 … FR-FIN-15 | 15 |
+| Functional | REV: dataset review | FR-REV-01 … FR-REV-15 | 15 |
+| Functional | FIN: pricing, earnings, ledger | FR-FIN-01 … FR-FIN-16 | 16 |
 | Functional | PAY: payouts | FR-PAY-01 … FR-PAY-14 | 14 |
-| Functional | ANN: annotation | FR-ANN-01 … FR-ANN-18 | 18 |
+| Functional | ANN: annotation | FR-ANN-01 … FR-ANN-20 | 20 |
 | Functional | MSG: messaging | FR-MSG-01 … FR-MSG-08 | 8 |
 | Functional | NOTIF: notifications & email | FR-NOTIF-01 … FR-NOTIF-06 | 6 |
 | Functional | EXP: exports | FR-EXP-01 … FR-EXP-07 | 7 |
-| Functional | ADM: administration | FR-ADM-01 … FR-ADM-12 | 12 |
+| Functional | ADM: administration | FR-ADM-01 … FR-ADM-20 | 20 |
 | Functional | AUD: audit & security logging | FR-AUD-01 … FR-AUD-05 | 5 |
 | Non-functional | PERF: performance | NFR-PERF-01 … NFR-PERF-06 | 6 |
 | Non-functional | AVL: availability & recovery | NFR-AVL-01 … NFR-AVL-05 | 5 |
@@ -87,7 +87,7 @@
 | Non-functional | UPL: upload reliability | NFR-UPL-01 … NFR-UPL-05 | 5 |
 | Non-functional | OBS: observability | NFR-OBS-01 … NFR-OBS-05 | 5 |
 | Security | SEC | SEC-01 … SEC-22 | 22 |
-| **Total** | | | **227** |
+| **Total** | | | **239** |
 
 ## 3. Overall description
 
@@ -173,7 +173,7 @@ See §10.
 | ID | Requirement | Pri | Source | Verif |
 |---|---|:-:|---|:-:|
 | FR-UPL-01 | `POST /datasets/{id}/uploads` with `filename`, `size_bytes`, `relative_path` (optional) and `content_type` (advisory) shall, for an owned dataset in `draft` or `changes_requested`, create an S3 multipart upload and an `upload_sessions` row (`initiated`). It returns `upload_id`, `part_size` (16 MiB, raised in whole MiB so that `part_count ≤ 10,000`), `part_count` and `expires_at` (now + 24 h). | M | BR-05; BL §7, §12 | T |
-| FR-UPL-02 | Initiation shall reject: `size_bytes > max_file_bytes` (5 GB) with `413 file_too_large`; an extension not in BL §7 and not in `extra_allowed_extensions` with `422 unsupported_type`; a dataset byte/file-count limit breach with `422 dataset_limit_exceeded`; a pending-quota breach with `422 quota_exceeded`; a filename longer than 255 chars after NFC normalisation with `422 validation_error`; and more than 20 non-terminal upload sessions for the user with `429 too_many_uploads`. | M | BR-05; BL §7 | T |
+| FR-UPL-02 | Initiation shall reject: `size_bytes > max_file_bytes` (4,000,000,000 bytes — AM-01) with `413 file_too_large`; an extension not in BL §7 and not in `extra_allowed_extensions` with `422 unsupported_type`; a dataset byte/file-count limit breach with `422 dataset_limit_exceeded`; a pending-quota breach with `422 quota_exceeded`; a filename longer than 255 chars after NFC normalisation with `422 validation_error`; and more than 20 non-terminal upload sessions for the user with `429 too_many_uploads`. | M | BR-05; BL §7 | T |
 | FR-UPL-03 | `POST /uploads/{id}/part-urls` with ≤ 100 part numbers shall return presigned PUT URLs valid for 15 minutes and set the session to `uploading`. Only the session owner may call it. | M | BR-05 | T |
 | FR-UPL-04 | `GET /uploads/{id}` shall return session status and the list of parts already stored (from S3 `ListParts`), which is the source of truth for resuming. | M | BR-05 | T |
 | FR-UPL-05 | `POST /uploads/{id}/complete` shall verify that the submitted part list matches `ListParts` (numbers and ETags) and that the stored size equals `size_bytes`, then complete the multipart upload. It creates a `dataset_files` row with `processing_status = uploaded`, marks the session `completed` and enqueues `processing.process_file`. On mismatch it returns `422 upload_incomplete` and lists the missing parts. Repeating the call on a completed session returns the same file id. | M | BR-05; BL §13 | T |
@@ -221,6 +221,7 @@ See §10.
 | FR-REV-12 | On finalization the owner shall receive an in-app notification and an email for "dataset approved", "partially approved", "rejected" or "changes requested", including accepted bytes and payable amount where applicable. | M | BR-10, BR-23 | T |
 | FR-REV-13 | After `changes_requested`, the owner may edit and resubmit (FR-DS-08), creating a new version and a new review. The next reviewer sees the earlier reviews and feedback. | M | BR-09; BL §9 | T |
 | FR-REV-14 | `GET /reviews/history` shall list the caller's finalized and released reviews. Admins may filter by any reviewer. | M | BR-09 | T |
+| FR-REV-15 | A reviewer shall hold at most `review_max_active_claims` (setting, default 5) `in_progress` dataset reviews at a time. A further `POST /datasets/{id}/claim-review` returns `409 review.claim_limit_reached` with `details.limit`. | M | BR-09; AM-09 | T |
 
 ### 4.8 FR-FIN: pricing, earnings and ledger
 
@@ -233,7 +234,7 @@ See §10.
 | FR-FIN-05 | A file shall earn > 0 only if eligible (BL §8.3). Files that are not eligible but were accepted (e.g. exact duplicate of a previously accepted file) shall get an `earning_records` row with `amount_micros = 0` and an `ineligible_reason`. | M | BR-12 | T |
 | FR-FIN-06 | When two or more accepted files in the same review share a SHA-256, only the earliest-created one shall earn. The others record `ineligible_reason = duplicate_in_dataset`. | M | BR-12 | T |
 | FR-FIN-07 | A file whose SHA-256 was already paid shall earn 0, except when the earlier payment was at the raw rate, the new dataset is `labeled` and the reviewer set `labeled_upgrade = true` (HA-08, setting `labeled_upgrade_enabled`, default true). In that case it earns `labeled_rate − rate_previously_paid` per GB (floored, never negative). A SHA-256 shall receive at most one labeled-upgrade payment. | M | BR-13; BL §8.4; HA-08 | T |
-| FR-FIN-08 | Dataset earnings shall credit the user wallet `available` bucket when `earning_hold_days = 0`. Otherwise they credit `pending` with `release_at = finalized_at + hold days`. `finance.release_pending` (hourly) shall post `earning_release` journals for due items, idempotently. | M | BR-14; A-07 | T |
+| FR-FIN-08 | Dataset earnings shall credit the user wallet `available` bucket when `earning_hold_days = 0`. Otherwise they credit `pending` and set `earning_records.hold_until = finalized_at + hold days`. Annotation rewards follow the same hold rule (AM-02). `finance.release_pending` (hourly) shall post one `earning_release` journal per due earning record, keyed `earning_release:{earning_record_id}`, idempotently. | M | BR-14; A-07 | T |
 | FR-FIN-09 | Each user shall have exactly one wallet (`kind = user`) created at registration. It holds both dataset earnings and annotation rewards, distinguished by journal kind. System wallets `system_dataset_purchases`, `system_annotation_labor`, `system_adjustments` and `system_payouts_settled` shall exist from the first migration. | M | BR-14, BR-21; BL §8.5 | T/I |
 | FR-FIN-10 | Every money movement shall be a `ledger_journals` row of a kind listed in BL §8.5 with balanced `wallet_transactions` lines (Σ = 0). Journals and lines cannot be updated or deleted. Cached balances are updated in the same transaction after `SELECT … FOR UPDATE` on the wallet row. | M | BR-14 | T |
 | FR-FIN-11 | `GET /wallet` shall return estimated, pending, available, reserved, paid, adjustments (net) and lifetime approved earnings (BL §8.6), as integer micros plus formatted strings. `GET /wallet/transactions` (paginated, filter by kind and date) and `GET /earnings` (per dataset and per annotation task, with the rule applied) shall show every line with a link to its source. | M | BR-14 | T |
@@ -241,6 +242,7 @@ See §10.
 | FR-FIN-13 | Nightly `finance.reconcile` shall recompute every wallet bucket from lines and compare it with the cached balances. It shall also check that Σ all lines = 0, that Σ `earning_records.amount_micros` per review equals its journal amount, and that no `available`/`reserved` balance is negative. Results are stored and shown at `GET /admin/finance/reconciliation`. Any mismatch raises an alert (NFR-OBS-04). | M | BR-14; BL §13 | T |
 | FR-FIN-14 | `GET /admin/finance/overview` (`finance.read`) shall show, for a date range: earnings credited (dataset vs annotation), adjustments, payouts by status and amount, outstanding liability (Σ user pending + available + reserved), and estimated liability of submitted and in-review datasets. `GET /admin/ledger` shall list journals with filters (user, kind, source, date). | M | BR-25, BR-34 | T |
 | FR-FIN-15 | Annotation rewards shall post `annotation_reward` journals against `system_annotation_labor` (key `annotation_review:{review_id}:reward`), never against `system_dataset_purchases`. | M | BR-21 | T |
+| FR-FIN-16 | Double payment of the same content shall be prevented in the database as well as in the service: every dataset `earning_records` row stores `content_sha256` (hex) and `pricing_tier` ∈ {`raw`, `labeled`, `labeled_upgrade`}; a partial unique index on `(content_sha256, pricing_tier) WHERE amount_micros > 0` rejects a second positive payment per tier, and finalize takes `pg_advisory_xact_lock(hashtext(content_sha256))` per file in sorted order before re-checking eligibility (FR-FIN-07). | M | BR-12, BR-13; AM-03 | T |
 
 ### 4.9 FR-PAY: payouts (manual)
 
@@ -283,6 +285,8 @@ See §10.
 | FR-ANN-16 | `POST /annotation/tasks/{id}/review` with `{decision: approve\|request_changes, score 1–5, comments}` shall be allowed only for the claiming reviewer. `comments` is required for `request_changes`. `approve` sets `approved`, inserts `annotation_reviews`, an `annotation_rewards` row and the reward journal (FR-FIN-15) in one transaction. Reward = `reward_per_task_micros + reward_per_page_micros × pages_in_task`, credited exactly once (unique `annotation_review_id`). `request_changes` sets `changes_requested`, stores `annotation_feedback` and notifies the annotator ("annotation returned"). | M | BR-20, BR-21 | T |
 | FR-ANN-17 | The reviewer view shall show the source document beside the annotation and a character-level diff between any two submitted versions. `GET /annotation/reviews/history` lists past reviews. `GET /annotation/my-rewards` lists the annotator's rewards per task. | M | BR-20, BR-21 | T |
 | FR-ANN-18 | `POST /annotation/projects/{id}/close` shall set the project `closed` and every non-approved task `cancelled`. Saved data is retained, but no further edits or rewards are possible. Tasks past `deadline` shall be flagged `overdue` in admin views, and assignees shall be notified 24 h before a deadline. | M | BR-18 | T |
+| FR-ANN-19 | When a task is approved, it shall be selected for a QA second review with probability `annotation_qa_sample_rate` (default 0.10). The QA review is an `annotation_reviews` row with `review_kind = qa` (primary reviews use `primary`), performed by a reviewer other than the annotator and the primary reviewer; it records score and comments only and never changes the task status or reward. Reviews whose claim is released or whose task is cancelled/reassigned end with status `cancelled`. | S | BR-20; AM-09 | T |
+| FR-ANN-20 | Tasks from datasets with `contains_personal_data = true` shall be assignable only to annotators, and claimable only by reviewers, whose `user_profiles.privacy_trained = true` (set by an admin). Otherwise assignment returns `422 annotator_not_eligible`. | M | BR-18; AM-09 | T |
 
 ### 4.11 FR-MSG: messaging
 
@@ -314,7 +318,7 @@ See §10.
 |---|---|:-:|---|:-:|
 | FR-EXP-01 | `POST /admin/exports` (`dataset.export`) shall accept a selection (explicit dataset ids and/or filters: category, language, `min_quality`, `data_class`, finalized-date range) and content options: `include_files` (accepted files only), `include_annotations` (approved only), `include_metadata`, and `annotation_text_form` (`verbatim`, `normalized_nfc` or `both`). Only `approved`/`partially_approved` datasets that are not `taken_down` are eligible. Rejected, quarantined and failed files are never exported. | M | BR-24 | T |
 | FR-EXP-02 | Exports shall run as `exports.build_export` on the `exports` queue with statuses `queued → running → completed \| failed` and a progress percentage. The API process never builds export content. | M | BR-24; BL §13 | T |
-| FR-EXP-03 | Each export shall produce ZIP part(s) ≤ 5 GB, each recorded in `export_files` with size and SHA-256. Every package contains `manifest.jsonl` (one line per file: export path, dataset id and version, file id, SHA-256, size, MIME, original filename, languages, category, licence, data class, quality score, annotation ids) plus `metadata.csv`. When annotations are included it also contains `annotations.jsonl` (BL §11 data plus project, task, version, reviewer score). Contributor PII (email, legal name, phone) is never included; contributors are identified by a pseudonymous id. | M | BR-24, BR-30 | T |
+| FR-EXP-03 | Each export shall produce ZIP part(s) ≤ 4 GB (4,000,000,000 bytes), each recorded in `export_files` with size and SHA-256. Every package contains `manifest.jsonl` (one line per file: export path, dataset id and version, file id, SHA-256, size, MIME, original filename, languages, category, licence, data class, quality score, annotation ids) plus `metadata.csv`. When annotations are included it also contains `annotations.jsonl` (BL §11 data plus project, task, version, reviewer score). Contributor PII (email, legal name, phone) is never included; contributors are identified by a pseudonymous id. | M | BR-24, BR-30 | T |
 | FR-EXP-04 | `POST /admin/exports/{id}/download-url` shall return a presigned URL valid for 5 minutes for one part, only for `completed` exports. Each issuance is audit-logged. | M | BR-24 | T |
 | FR-EXP-05 | Completed exports shall expire 7 days after completion (`exports.expire` daily). Objects are deleted and status set to `expired`. | M | BR-24; A-15 | T |
 | FR-EXP-06 | Each export shall audit the requester, time, selection criteria, resolved dataset ids, file count and total bytes. `GET /admin/exports` and `GET /admin/exports/{id}` show this history. | M | BR-24, BR-26 | T |
@@ -328,14 +332,22 @@ See §10.
 | FR-ADM-02 | `POST /admin/users/{id}/suspend` (reason ≥ 10 chars) shall set `suspended`, revoke all sessions, and block login, uploads, submissions, payout requests and annotation work. `POST /admin/users/{id}/reactivate` restores `active`. Both notify the user by email. Admins cannot suspend themselves or a super_admin. | M | BR-03 | T |
 | FR-ADM-03 | `PUT /admin/users/{id}/roles` (`user.manage`) shall let admins grant or revoke `annotator` and `reviewer`. Granting or revoking `admin` or `super_admin` requires `role.manage` (super_admin). No user may change their own roles, and the last active super_admin cannot be demoted (`409 last_super_admin`). Role changes take effect on the next request (permissions resolved per request). | M | BR-04, BR-27 | T |
 | FR-ADM-04 | `POST /admin/users/{id}/revoke-sessions` shall revoke all sessions of the user. | M | BR-30 | T |
-| FR-ADM-05 | `GET /admin/datasets` (`dataset.read.any`) shall support `q` (title, description, tags), and filters `status`, `data_class`, `language`, `category`, `min_quality`, `owner`, and created/finalized date range, with pagination and sorting. `GET /admin/datasets/{id}` shows full details including reviews, earnings and duplicates. | M | BR-24 | T |
+| FR-ADM-05 | `GET /admin/datasets` (`dataset.read.any`) shall support `q` (dataset code `DS-YYYY-NNNNNN`, title, description, tags), and filters `status`, `data_class`, `language`, `category`, `min_quality`, `owner`, and created/finalized date range, with pagination and sorting. `GET /admin/datasets/{id}` shows full details including reviews, earnings and duplicates. | M | BR-24 | T |
 | FR-ADM-06 | `GET /admin/analytics/overview?from&to` (`analytics.read`) shall return: registrations; verified users; datasets submitted and finalized by decision; submitted, accepted and rejected bytes; acceptance rate; median submit→finalize time; earnings credited; payouts requested and paid; outstanding liability; annotation tasks by status; pages approved; first-pass approval rate; open conversations; storage bytes in use. Each chart shall have a tabular alternative. | M | BR-25, BR-34 | T |
 | FR-ADM-07 | The admin dashboard shall show actionable queue counts: verifications pending, datasets submitted, reviews in progress > 3 days, payouts requested/approved-unpaid, conversations awaiting admin, failed background jobs (24 h), and the latest reconciliation result. | M | BR-25 | D/T |
-| FR-ADM-08 | `GET /admin/settings` and `PUT /admin/settings/{key}` (`settings.manage`, super_admin) shall manage typed, validated settings, at least: `max_file_bytes`, `max_dataset_bytes`, `user_pending_quota_bytes`, `earning_hold_days`, `min_withdrawal_micros`, `max_withdrawal_micros`, `payout_dual_approval_threshold_micros`, `labeled_upgrade_enabled`, `extra_allowed_extensions`, `review_reason_codes`, `dataset_categories`, `contributor_agreement_version`. Every change is audit-logged with old and new values. | M | BR-27 | T |
+| FR-ADM-08 | `GET /admin/settings` and `PUT /admin/settings/{key}` (`settings.manage`, super_admin) shall manage typed, validated settings, at least: `max_file_bytes`, `max_dataset_bytes`, `user_pending_quota_bytes`, `earning_hold_days`, `min_withdrawal_micros`, `max_withdrawal_micros`, `payout_dual_approval_threshold_micros`, `labeled_upgrade_enabled`, `extra_allowed_extensions`, `review_reason_codes`, `dataset_categories`, `contributor_agreement_version`, and (AM-06, AM-09) `maintenance_mode`, `review_max_active_claims`, `annotation_qa_sample_rate`, `legal_docs_approved`. `max_file_bytes` cannot exceed 4,000,000,000 (AM-01). Every change is audit-logged with old and new values. | M | BR-27 | T |
 | FR-ADM-09 | `GET /admin/roles` shall list roles and their permission codes (BL §6). | M | BR-27 | T |
-| FR-ADM-10 | `POST /public/contact` (anonymous, rate-limited) shall accept name, email, category (`general`, `takedown`, `privacy`, `account`) and a message ≤ 5,000 chars. `takedown` and `privacy` submissions create `takedown_requests` that admins track (status `open → investigating → actioned \| dismissed`) with a link to the affected dataset. | M | BR-28 | T |
+| FR-ADM-10 | `POST /public/contact` (anonymous, rate-limited) shall accept name, email, category (`general`, `takedown`, `privacy`, `account`) and a message ≤ 5,000 chars. Formal takedown/privacy notices use the dedicated `POST /public/takedown-requests` (FR-ADM-13); a contact message with category `takedown` or `privacy` also creates a `takedown_requests` row (`source = public_form`). Requests are tracked with status `received → under_review → actioned \| rejected` (or `withdrawn`) and a link to the affected dataset (FR-ADM-14). | M | BR-28 | T |
 | FR-ADM-11 | Admins shall process `deletion_requests` (`pending → processed \| refused` with reason). Processing executes FR-USER-07. | M | BR-28 | T |
 | FR-ADM-12 | Admins shall view `background_job_records` (task, status, attempts, last error) filtered by status and task, and may re-enqueue a failed idempotent job. | S | BR-31 | T |
+| FR-ADM-13 | `POST /public/takedown-requests` (no login, CSRF + rate limit 5/h per IP, honeypot) shall accept requester name, email, organisation, `claim_type` (`copyright`, `privacy`, `illegal_content`, `consent_withdrawn`, `other`), dataset reference (code or id, optional), description (20–10,000 chars), evidence URL and a sworn statement, create a `takedown_requests` row (`received`), acknowledge by email and notify admins. The response is always `202` and never reveals whether the referenced dataset exists. | M | BR-28; AM-04 | T |
+| FR-ADM-14 | `GET /admin/takedown-requests` (`user.manage`) shall list requests filtered by status (comma-separated), claim type, source, dataset and date. `POST /admin/takedown-requests/{id}/decision` (step-up MFA) shall move a request `received → under_review` or `received\|under_review → actioned\|rejected` with notes; `actioned` requires the dataset to be `taken_down` already or `apply_takedown = true`, which performs FR-DS-12 in the same transaction. The requester is emailed the outcome. | M | BR-28; AM-04 | T |
+| FR-ADM-15 | When the setting `maintenance_mode` is true, every API call except `/healthz`, `/readyz`, `/auth/*`, `/admin/*` and other admin-MFA endpoints shall return `503 service_unavailable` with `details.reason = "maintenance"` and `Retry-After`; the web app shows the maintenance page. The switch takes effect within 60 s and is audit-logged. | M | BR-31; AM-06 | T |
+| FR-ADM-16 | Datasets, payout requests and export jobs shall receive an immutable human reference code `DS-YYYY-NNNNNN`, `PO-YYYY-NNNNNN` and `EX-YYYY-NNNNNN` respectively (per-prefix, per-UTC-year counter in `dataset_code_counters`, allocated in the creating transaction), returned as `code` by the API, shown in the UI wherever the record is referenced and searchable by exact code. URLs keep using the UUID. | M | BR-24, BR-25; AM-07 | T |
+| FR-ADM-17 | Admin list endpoints shall support: `role` on `GET /admin/users`; `user_id` on `GET /admin/payouts`; `entity_type`, `entity_id` and `actor_id` on `GET /admin/audit-logs`. Every `status` filter shall accept a comma-separated list of values (e.g. `?status=requested,approved`). | M | BR-25, BR-26; AM-05 | T |
+| FR-ADM-18 | A super_admin shall be able to set and release a legal hold (`legal_hold` + mandatory `legal_hold_reason`) on a user or a dataset. While held, retention purges, owner deletion, account anonymisation and secure deletion after takedown are suspended for the held records. Setting and releasing are audit-logged. | M | BR-28; AM-09 | T |
+| FR-ADM-19 | Beat job `admin.requeue_stalled` (every 5 min) shall re-enqueue `email_outbox` rows `pending` > 2 min, `dataset_files` `uploaded` > 5 min and `export_jobs` `queued` > 5 min. Target tasks are status-guarded so duplicate enqueues have no effect. | M | BR-31; AM-10 | T |
+| FR-ADM-20 | While the setting `legal_docs_approved` is `false` (default), the Terms of Service, Privacy Policy and Contributor Agreement pages and acceptance dialogs shall carry a visible "Draft — pending legal review" banner, and the release-readiness check shall fail for production (HA-01). Only super_admin may set it to `true` (audited). | M | BR-28; AM-09; HA-01 | T |
 
 ### 4.15 FR-AUD: audit and security logging
 
@@ -403,7 +415,7 @@ An automated authorization test matrix (TEST_CASES.md) shall exercise every endp
 | ID | Requirement | Pri | Source | Verif |
 |---|---|:-:|---|:-:|
 | NFR-AVL-01 | Monthly availability of the web app and API shall be ≥ 99.5 %, measured by an external probe of `/readyz` and the home page every 60 s. This excludes planned maintenance ≤ 4 h/month announced ≥ 48 h in advance. | M | BR-31; BL §14 | T |
-| NFR-AVL-02 | RPO ≤ 24 h through a daily encrypted `pg_dump` retained 30 days plus object-storage versioning (noncurrent versions kept 30 days). Optional WAL archiving gives RPO 15 min. | M | BR-31 | T |
+| NFR-AVL-02 | RPO ≤ 24 h through a daily encrypted `pg_dump` retained 30 days plus object-storage backup per AM-13: on AWS S3 bucket versioning (noncurrent versions kept 30 days); on Cloudflare R2 (no versioning) a nightly `rclone sync` to a separate backup bucket/provider keeping deleted objects 30 days. Optional WAL archiving gives RPO 15 min. | M | BR-31 | T |
 | NFR-AVL-03 | RTO ≤ 4 h for a full restore of database and service on new infrastructure, proven by a restore drill before launch and every quarter (E2E Scenario 8). | M | BR-31 | T |
 | NFR-AVL-04 | `GET /healthz` shall return 200 when the process is alive, with no dependency checks. `GET /readyz` shall return 200 only when PostgreSQL, Redis and object storage respond within 2 s, and 503 otherwise. The web app shows the Maintenance page when the API returns 503. | M | BR-31 | T |
 | NFR-AVL-05 | Degraded dependencies shall not lose data. ClamAV down: files remain `processing` and are retried, and nothing becomes `ready`. SMTP down: outbox rows remain queued. Worker down: uploads still complete and tasks run when workers return. Redis down: API returns 503 for affected endpoints rather than bypassing rate limits. | M | BR-31, A-10 | T |
@@ -439,9 +451,9 @@ An automated authorization test matrix (TEST_CASES.md) shall exercise every endp
 
 | ID | Requirement | Pri | Source | Verif |
 |---|---|:-:|---|:-:|
-| NFR-UPL-01 | ≥ 99 % of upload sessions for files ≤ 5 GB that the client does not cancel shall reach `completed`, measured over a 7-day staging soak with injected network faults and in production. | M | BR-05; BL §14 | T |
+| NFR-UPL-01 | ≥ 99 % of upload sessions for files ≤ 4 GB (the AM-01 maximum) that the client does not cancel shall reach `completed`, measured over a 7-day staging soak with injected network faults and in production. | M | BR-05; BL §14 | T |
 | NFR-UPL-02 | An upload interrupted by network loss, tab closure or browser restart shall be resumable within the 24 h session lifetime without re-uploading already stored parts (E2E Scenario 6). | M | BR-05 | T |
-| NFR-UPL-03 | A resumed upload shall produce an object whose server-computed SHA-256 equals the SHA-256 of the source file (verified in tests with 2 GB and 5 GB fixtures). | M | BR-05 | T |
+| NFR-UPL-03 | A resumed upload shall produce an object whose server-computed SHA-256 equals the SHA-256 of the source file (verified in tests with 2 GB and 4,000,000,000-byte fixtures). | M | BR-05 | T |
 | NFR-UPL-04 | The system shall sustain 50 concurrent multipart uploads (A-03) without API p95 latency exceeding NFR-PERF-01, because bytes go directly to object storage. | M | A-03 | T |
 | NFR-UPL-05 | Uploads shall work on a 1 Mbps link. The client uses a per-part timeout of 10 min and adapts concurrency down to 1 part on repeated timeouts. | S | BR-05; OC-03 | T |
 
@@ -514,7 +526,7 @@ Client-side handling (normative for the web app): `401` → redirect to login, p
 | Architecture | Modular monolith with modules identity, datasets, processing, review, finance, annotation, messaging, exports, admin. Cross-module calls only via service functions | BL §4 |
 | Dev ports | web 3410, api 8410, postgres 5440, redis 6390, S3 9410/9411, mailpit 8425/1035 | BL §5 |
 | Document viewing | Server-rendered page images; no PDF.js; no LibreOffice in v1 | BL §3; A-11 |
-| Scale envelope | ≤ 2,000 users, ≤ 200 concurrent sessions, ≤ 50 concurrent uploads, ≤ 20 TB year 1, file ≤ 5 GB, dataset ≤ 50 GB | A-03 |
+| Scale envelope | ≤ 2,000 users, ≤ 200 concurrent sessions, ≤ 50 concurrent uploads, ≤ 20 TB year 1, file ≤ 4 GB (AM-01), dataset ≤ 50 GB | A-03; AM-01 |
 | Currency | USD only, micro-USD integers | A-04 |
 | Payments | Manual only; no transfer APIs | Part 3; FR-PAY-14 |
 | Hosting | Containers without Kubernetes; single region | Part 6 |
@@ -561,29 +573,29 @@ Further gates: NFR-ACC-01 report; NFR-PERF-01 load-test report; SEC-20 scan repo
 | BR-06 | FR-PROC-01…09; FR-DS-14; FR-UPL-08; SEC-10, 11 |
 | BR-07 | FR-DS-02, 03, 13, 14; FR-ANN-08; FR-VER-07; FR-AUD-04; SEC-08, 09 |
 | BR-08 | FR-DS-01, 08 |
-| BR-09 | FR-REV-01…14; FR-DS-04, 08 |
+| BR-09 | FR-REV-01…15; FR-DS-04, 08 |
 | BR-10 | FR-REV-06, 07, 12; FR-DS-11 |
 | BR-11 | FR-FIN-01…04; FR-DS-10; FR-REV-08 |
-| BR-12 | FR-FIN-05, 06; FR-PROC-05, 11, 12 |
-| BR-13 | FR-FIN-07; FR-REV-04 |
+| BR-12 | FR-FIN-05, 06, 16; FR-PROC-05, 11, 12 |
+| BR-13 | FR-FIN-07, 16; FR-REV-04 |
 | BR-14 | FR-FIN-08…13; FR-PAY-03, 04; NFR-INT-01…03 |
 | BR-15 | FR-PAY-01, 05, 06, 09, 10, 14; FR-USER-04 |
 | BR-16 | FR-PAY-01, 02, 07, 08; FR-USER-05 |
 | BR-17 | FR-PAY-11, 12; FR-FIN-12 |
-| BR-18 | FR-ANN-01…07, 18 |
+| BR-18 | FR-ANN-01…07, 18, 20 |
 | BR-19 | FR-ANN-09…14 |
-| BR-20 | FR-ANN-15…17; FR-EXP-01, 03 |
+| BR-20 | FR-ANN-15…17, 19; FR-EXP-01, 03 |
 | BR-21 | FR-ANN-16, 17; FR-FIN-15 |
 | BR-22 | FR-MSG-01…08 |
 | BR-23 | FR-NOTIF-01…06; FR-REV-12; FR-PAY-13; NFR-PERF-05 |
-| BR-24 | FR-EXP-01…07; FR-ADM-05; NFR-INT-09 |
-| BR-25 | FR-ADM-06, 07; FR-FIN-14 |
-| BR-26 | FR-AUD-01…05 |
+| BR-24 | FR-EXP-01…07; FR-ADM-05, 16; NFR-INT-09 |
+| BR-25 | FR-ADM-06, 07, 16, 17; FR-FIN-14 |
+| BR-26 | FR-AUD-01…05; FR-ADM-17 |
 | BR-27 | FR-ADM-03, 08, 09; FR-FIN-01 |
-| BR-28 | FR-DS-05, 12; FR-USER-07; FR-ADM-10, 11 |
+| BR-28 | FR-DS-05, 12; FR-USER-07; FR-ADM-10, 11, 13, 14, 18, 20 |
 | BR-29 | FR-ANN-12; FR-PROC-10; NFR-ACC-06, 07 |
 | BR-30 | SEC-01…22; FR-AUTH-02, 06…13; NFR-OBS-05 |
-| BR-31 | NFR-AVL-01…05; NFR-OBS-04; FR-ADM-12 |
+| BR-31 | NFR-AVL-01…05; NFR-OBS-04; FR-ADM-12, 15, 19 |
 | BR-32 | NFR-ACC-01…05; NFR-PERF-04 |
 | BR-33 | NFR-INT-10 (contract-first API), BL §4 module boundaries (validated in SAD review), FR-FIN-09 (system wallets incl. reserved `system_payouts_settled`) |
 | BR-34 | FR-FIN-14; FR-ADM-06; FR-REV-05 |

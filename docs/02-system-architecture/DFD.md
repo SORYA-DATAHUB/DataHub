@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document ID | DH-ARCH-DFD |
-| Version | 1.0 |
+| Version | 1.1 (baseline §16 AM-13 applied) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | CTO role |
@@ -15,7 +15,7 @@
 ## Header
 
 - **Purpose.** Show how data moves through DataHub — browser, backend API, file storage, processing workers, database, annotation editor, review engine, wallet ledger and export service — and where it crosses trust boundaries, with a classification for every store and flow. This is the input to the threat model (STRIDE per element) and to privacy/retention policies.
-- **Scope.** All v1 data flows at level 0 (context) and level 1 (major processes), plus detail views for upload/processing, review→ledger, annotation and export. Excludes CI/CD and backup pipelines (covered in DOCKER_CICD.md and BACKUP_DISASTER_RECOVERY.md).
+- **Scope.** All v1 data flows at level 0 (context) and level 1 (major processes), plus detail views for upload/processing, review→ledger, annotation and export. Excludes CI/CD and backup pipelines (covered in DOCKER_CICD.md and BACKUP_DISASTER_RECOVERY.md), except that the object-storage backup store D5 (baseline AM-13) is listed in the data-store table.
 - **Assumptions.** A-02 (verbatim Khmer transcription), A-04 (micro-USD), A-05 (payout method details admin-visible JSON), A-08 (verification data), A-10 (fail-closed scanning), A-13 (UTC), A-15 (retention).
 - **Decisions.** ADR-0005, ADR-0006 (browser ↔ storage direct flows), ADR-0007 (only server-rendered derivatives reach the viewer), ADR-0008 (session tokens never stored in clear), ADR-0009 (ledger), ADR-0012 (outbox), ADR-0015 (realtime).
 - **Dependencies.** [SAD.md](SAD.md) trust zones Z0–Z5; baseline §§6, 8, 10, 12, 13.
@@ -302,5 +302,6 @@ flowchart LR
 |---|---|---|---|---|
 | D1 Postgres | All entities, ledger, audit, outbox | Restricted | Encrypted volume (VM disk encryption / managed DB) | Financial and audit 7 years; security events 1 year; others per DATA_RETENTION_DELETION.md |
 | D2 Redis | Task messages (IDs), rate-limit counters, pub/sub transient events | Internal | Not persisted beyond AOF (optional) | Minutes to hours |
-| D3 Object storage `datahub-private` | Originals, members, previews, attachments, verification docs, payout proofs, exports | Restricted (ID docs, proofs) / Confidential | Provider SSE (R2/S3); versioning on | Rejected 90 days; drafts 30 days; abandoned uploads 24 h; exports 7 days |
+| D3 Object storage `datahub-private` | Originals, members, previews, attachments, verification docs, payout proofs, exports | Restricted (ID docs, proofs) / Confidential | Provider SSE (R2/S3); object backup per AM-13: S3 versioning + 30-day noncurrent lifecycle, or on R2 nightly `rclone sync` to D5 | Rejected 90 days; drafts 30 days; abandoned uploads 24 h; exports 7 days |
 | D4 Backups | `pg_dump` archives in separate bucket | Restricted | Provider SSE + client-side encryption of dumps | 30 daily + 12 monthly (per BACKUP_DISASTER_RECOVERY.md) |
+| D5 Object backup (R2 only, AM-13) | Nightly `rclone sync` copy of `datahub-private` in a separate backup bucket/provider with separate credentials | Restricted | Provider SSE | Mirrors D3; deleted/overwritten objects kept 30 days, then purged (legal deletion also purges the copy) |

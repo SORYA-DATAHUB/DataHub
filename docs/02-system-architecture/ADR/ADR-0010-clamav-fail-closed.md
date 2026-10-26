@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | ADR | ADR-0010 |
-| Version | 1.0 |
+| Version | 1.1 (amended by baseline AM-01 / D-014) |
 | Date | 2026-10-26 |
 | Status | Accepted (2026-10-26) |
 | Document status | Baseline |
@@ -52,5 +52,5 @@ Scan every non-container file (including each extracted ZIP member and every mes
 
 ## Consequences
 
-- clamd `StreamMaxLength` set to 5 GB to match `max_file_bytes`.
+- Amended by baseline AM-01 (`DECISION_LOG.md` D-014): because clamd cannot scan a single stream ≥ 4 GiB, the per-file limit (`max_file_bytes`) is 4,000,000,000 bytes for every upload and every extracted ZIP member, and clamd runs with `StreamMaxLength 4000M`, `MaxScanSize 4000M`, `MaxFileSize 4000M`. Every object is scanned whole — there is no windowed/partial scan mode. ZIP containers are hashed but not scanned (`skipped_container`); each member is scanned individually.
 - Worker readiness and scan error rates are monitored.

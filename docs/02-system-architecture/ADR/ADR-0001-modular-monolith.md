@@ -41,7 +41,7 @@ Build the backend as one Python package `datahub` with nine business modules (`i
 |---|---|
 | Microservices (one per module) | Independent scaling and deploys, but distributed transactions/sagas for every review-to-ledger flow, more infrastructure, network failure modes and an operations load the team cannot carry at A-03 scale. |
 | Single unstructured monolith | Fastest to start, but module coupling grows quickly and blocks later extraction; makes ownership of tables unclear. |
-| Serverless functions | Cold starts and execution time limits clash with 5 GB file processing and multi-hour exports; vendor lock-in. |
+| Serverless functions | Cold starts and execution time limits clash with multi-GB (≤ 4 GB) file processing and multi-hour exports; vendor lock-in. |
 
 ## Tradeoffs
 

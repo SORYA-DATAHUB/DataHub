@@ -305,22 +305,22 @@ All-in cost per approved page = $0.08 reward + $0.05 review labour (30 s × $6/h
 
 ## 13. Business risks
 
-| ID | Risk | Likelihood | Impact | Mitigation | Owner |
-|---|---|:-:|:-:|---|---|
-| R-01 | Copyrighted or unlawfully obtained documents are uploaded and paid for. | High | High | Rights declaration at onboarding and per dataset; reviewer checklist; takedown workflow; non-exclusive licence (HA-02); ability to take down and adjust. | Legal / admins |
-| R-02 | Personal or sensitive data (ID cards, medical records) is uploaded. | Medium | High | `contains_personal_data` flag; reviewer reason codes; restricted exports; retention rules; HA-03. | Legal / reviewers |
-| R-03 | Duplicate or recycled content is paid twice (including across accounts). | High | Medium | Global SHA-256 exact-duplicate exclusion; near-duplicate flags; labeled-upgrade rule; one person = one account in the agreement; verification of identity before payout. | Product |
-| R-04 | Payout fraud (fake accounts, account takeover, insider payout to self). | Medium | High | Verification before withdrawals; admin MFA; separation of duties; dual approval ≥ $100; unique payment references; audit log. | Finance |
-| R-05 | Review backlog makes contributors wait and churn. | Medium | Medium | Queue age metric; target ≤ 5 business days; bulk tools; add reviewers when the queue exceeds 300 GB. | Ops |
-| R-06 | Per-GB pricing attracts low-value high-resolution junk. | High | Medium | Reason codes, quality scores, partial acceptance, owner price review after 6 months (HA-06). | Owner |
-| R-07 | Malware in uploads compromises staff machines. | Medium | High | ClamAV fail-closed; previews rendered server-side; downloads as attachments only; files never executed. | Security |
-| R-08 | Cost overrun on storage (rejected data and previews). | Low | Low | Retention purge (rejected 90 days); storage alerts at 80 % of budgeted TB. | Ops |
-| R-09 | Tax or regulatory obligations on payments (HA-04) are discovered late. | Medium | High | Legal review before launch; ledger and exports support per-user annual statements. | Finance |
-| R-10 | Annotator quality in Khmer Unicode (legacy font habits, wrong COENG order) is poor. | Medium | Medium | Guidelines; verbatim storage + normalised export; reviewer scoring; feedback loops. | Annotation lead |
-| R-11 | Lack of contributors outside Phnom Penh. | Medium | Medium | Outreach to universities, pagodas, NGOs; low minimum withdrawal ($10); ABA Pay support. | Owner |
-| R-12 | Key-person dependency on a small admin team. | Medium | Medium | Runbooks; role separation; ≥ 2 admins with `payout.approve` at launch. | Owner |
+| ID | Risk | Likelihood | Impact | Mitigation | Owner | Maps to (`RISK_REGISTER.md`) |
+|---|---|:-:|:-:|---|---|---|
+| BRISK-01 | Copyrighted or unlawfully obtained documents are uploaded and paid for. | High | High | Rights declaration at onboarding and per dataset; reviewer checklist; takedown workflow; non-exclusive licence (HA-02); ability to take down and adjust. | Legal / admins | R-01 |
+| BRISK-02 | Personal or sensitive data (ID cards, medical records) is uploaded. | Medium | High | `contains_personal_data` flag; reviewer reason codes; restricted exports; retention rules; HA-03. | Legal / reviewers | R-02 |
+| BRISK-03 | Duplicate or recycled content is paid twice (including across accounts). | High | Medium | Global SHA-256 exact-duplicate exclusion; near-duplicate flags; labeled-upgrade rule; one person = one account in the agreement; verification of identity before payout. | Product | R-03, R-04 |
+| BRISK-04 | Payout fraud (fake accounts, account takeover, insider payout to self). | Medium | High | Verification before withdrawals; admin MFA; separation of duties; dual approval ≥ $100; unique payment references; audit log. | Finance | R-10, R-03 |
+| BRISK-05 | Review backlog makes contributors wait and churn. | Medium | Medium | Queue age metric; target ≤ 5 business days; bulk tools; add reviewers when the queue exceeds 300 GB. | Ops | R-14 (new) |
+| BRISK-06 | Per-GB pricing attracts low-value high-resolution junk. | High | Medium | Reason codes, quality scores, partial acceptance, owner price review after 6 months (HA-06). | Owner | R-03 |
+| BRISK-07 | Malware in uploads compromises staff machines. | Medium | High | ClamAV fail-closed; previews rendered server-side; downloads as attachments only; files never executed. | Security | R-05 |
+| BRISK-08 | Cost overrun on storage (rejected data and previews). | Low | Low | Retention purge (rejected 90 days); storage alerts at 80 % of budgeted TB. | Ops | R-11 |
+| BRISK-09 | Tax or regulatory obligations on payments (HA-04) are discovered late. | Medium | High | Legal review before launch; ledger and exports support per-user annual statements. | Finance | R-15 (new) |
+| BRISK-10 | Annotator quality in Khmer Unicode (legacy font habits, wrong COENG order) is poor. | Medium | Medium | Guidelines; verbatim storage + normalised export; reviewer scoring; feedback loops. | Annotation lead | R-16 (new) |
+| BRISK-11 | Lack of contributors outside Phnom Penh. | Medium | Medium | Outreach to universities, pagodas, NGOs; low minimum withdrawal ($10); ABA Pay support. | Owner | R-17 (new) |
+| BRISK-12 | Key-person dependency on a small admin team. | Medium | Medium | Runbooks; role separation; ≥ 2 admins with `payout.approve` at launch. | Owner | R-18 (new) |
 
-These business risks are the seed of `RISK_REGISTER.md` (R-01 … R-12). Technical risks continue from R-13 in that register.
+Business risks use the `BRISK-xx` namespace (baseline AM-12); `RISK_REGISTER.md` is the only `R-xx` namespace and the register of record for scoring, owners and status. The last column gives the register entry each business risk is tracked under; BRISK-05 and BRISK-09 … BRISK-12 had no technical equivalent and were added to the register as R-14 … R-18.
 
 ## 14. Success metrics (year 1, measured from DataHub analytics and the ledger)
 

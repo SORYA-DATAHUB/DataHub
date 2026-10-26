@@ -254,7 +254,7 @@ Should items ship in v1.0 if their phase gate is met on time. Otherwise they mov
 | DR-09 | ClamAV signature updates or memory (≈ 1.2 GB+) on small hosts. | A/H | Medium | Medium | Size the worker host ≥ 4 GB RAM for clamd. Freshclam health alert. Fail-closed keeps safety. |
 | DR-10 | Key-person dependency (2 BE engineers own the ledger and uploads). | All | Medium | High | Pair on ledger/upload modules. LLD and runbooks kept current. Code review by both BEs. |
 
-These delivery risks are to be registered in RISK_REGISTER.md alongside the business risks R-01 … R-12 from BRD §13.
+These delivery risks keep their `DR-xx` IDs and are registered in `RISK_REGISTER.md` §2 (baseline AM-12). Business risks from BRD §13 are numbered `BRISK-xx` and mapped to register entries `R-xx`; `R-xx` IDs exist only in `RISK_REGISTER.md`.
 
 ## 8. Post-MVP roadmap
 

@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | ADR | ADR-0006 |
-| Version | 1.0 |
+| Version | 1.1 (amended by baseline AM-01) |
 | Date | 2026-10-26 |
 | Status | Accepted (2026-10-26) |
 | Document status | Baseline |
@@ -29,7 +29,7 @@ Accepted — 2026-10-26.
 
 ## Context
 
-Contributors upload files up to 5 GB and datasets up to 50 GB, often over unreliable networks in Cambodia. Target: ≥ 99 % upload success on the resumable path. Proxying bytes through the API would tie up API workers, bandwidth and disk, and make resumption hard.
+Contributors upload files up to 4 GB (4,000,000,000 bytes, baseline AM-01) and datasets up to 50 GB, often over unreliable networks in Cambodia. Target: ≥ 99 % upload success on the resumable path. Proxying bytes through the API would tie up API workers, bandwidth and disk, and make resumption hard.
 
 ## Decision
 
@@ -41,7 +41,7 @@ The browser uploads directly to object storage using S3 multipart upload. The AP
 |---|---|
 | tus protocol server (tusd) | Excellent resumability, but adds a service, stores bytes on its disk then copies to S3. |
 | Upload through API with streaming to S3 | Simple client, but API bandwidth and timeouts become the bottleneck; resumption needs custom chunk state. |
-| Single presigned PUT per file | Simplest, but no resume and S3 limits single PUT to 5 GB, failing at the edge of our limit. |
+| Single presigned PUT per file | Simplest, but no resume; a multi-GB file restarting from zero after every network drop is unacceptable on Cambodian links (S3 also caps a single PUT at 5 GB). |
 
 ## Tradeoffs
 

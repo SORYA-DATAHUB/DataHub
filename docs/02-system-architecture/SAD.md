@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document ID | DH-ARCH-SAD |
-| Version | 1.0 |
+| Version | 1.1 (baseline §16 AM-01, AM-06, AM-10, AM-13 applied) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | CTO role |
@@ -16,7 +16,7 @@
 
 - **Purpose.** Describe the architecture of DataHub v1: its style, technology choices, runtime components, module boundaries, integrations, security boundaries, deployment model, scaling path and constraints, so that every later design, implementation and operations artefact can be traced to an explicit architectural decision.
 - **Scope.** The whole v1 system: Next.js web app, FastAPI API (HTTP + WebSocket), Celery workers and beat, PostgreSQL, Redis, S3-compatible object storage, ClamAV, SMTP, Caddy reverse proxy, and the local development and single-VM production environments. Out of scope: v2 `buyer` role and `orders` module (A-01), automated payment rails (A-05), LibreOffice rendering (A-11).
-- **Assumptions.** A-01 (single operator organisation), A-02 (Khmer/English, UTF-8), A-03 (≤ 2,000 users, ≤ 200 concurrent sessions, ≤ 50 concurrent uploads, ≤ 20 TB year 1, file ≤ 5 GB, dataset ≤ 50 GB), A-04 (integer micro-USD), A-05 (manual payouts), A-10 (ClamAV fail-closed), A-11 (no LibreOffice), A-12 (any SMTP provider), A-13 (UTC timestamps), A-15 (retention defaults).
+- **Assumptions.** A-01 (single operator organisation), A-02 (Khmer/English, UTF-8), A-03 (≤ 2,000 users, ≤ 200 concurrent sessions, ≤ 50 concurrent uploads, ≤ 20 TB year 1, file ≤ 4 GB = 4,000,000,000 B per AM-01, dataset ≤ 50 GB), A-04 (integer micro-USD), A-05 (manual payouts), A-10 (ClamAV fail-closed), A-11 (no LibreOffice), A-12 (any SMTP provider), A-13 (UTC timestamps), A-15 (retention defaults).
 - **Decisions.** ADR-0001 … ADR-0015 (see [ADR/README.md](ADR/README.md)). This SAD summarises them; each ADR holds the rationale.
 - **Dependencies.** `ENGINEERING_BASELINE.md` §§3–14; MASTER_PROMPT Parts 6, 16, 17, 21, 23, 24; HA-05 (production hosting, domain, SMTP, storage credentials) for go-live.
 - **Acceptance criteria.**
@@ -33,7 +33,7 @@
 
 | Driver | Source | Architectural consequence |
 |---|---|---|
-| Large documents (≤ 5 GB per file, ≤ 50 GB per dataset) uploaded over unreliable links | A-03, MASTER Part 9 | Browser uploads directly to object storage using S3 multipart with presigned part URLs; API never proxies file bytes (ADR-0006). |
+| Large documents (≤ 4 GB per file — AM-01, clamd single-stream limit — ≤ 50 GB per dataset) uploaded over unreliable links | A-03, MASTER Part 9 | Browser uploads directly to object storage using S3 multipart with presigned part URLs; API never proxies file bytes (ADR-0006). |
 | Untrusted file content (malware, zip bombs, polyglots) | MASTER Part 16 | All content inspection happens in isolated workers; fail-closed scanning (ADR-0010); server-side rendered previews only (ADR-0007). |
 | Money must be exact, traceable, never double-spent | Baseline §8, MASTER Part 11 | Integer micro-USD, append-only double-entry ledger, idempotency keys, row locks (ADR-0009). |
 | Small team, small initial scale, low ops budget | A-03, MASTER Part 6 | Modular monolith (ADR-0001) on a single VM with Docker Compose and Caddy (ADR-0013); no Kubernetes. |
@@ -72,7 +72,7 @@ Style rules:
 | Tasks | Celery 5 + Celery beat, Redis broker | Queues `default`, `processing`, `exports`, `email`; `acks_late=True` (ADR-0004). |
 | Database | PostgreSQL 17 | citext, exclusion constraints, deferred constraint triggers for ledger balance. |
 | Cache / broker / pub/sub / rate limits | Redis 8 | Ephemeral; loss of Redis loses no committed business data. |
-| Object storage | S3 API — dev SeaweedFS (`chrislusf/seaweedfs`), prod Cloudflare R2 or AWS S3 | ADR-0005. Bucket `datahub-private`, private, versioning on in prod. |
+| Object storage | S3 API — dev SeaweedFS (`chrislusf/seaweedfs`), prod Cloudflare R2 or AWS S3 | ADR-0005. Bucket `datahub-private`, private; object backup per AM-13 (S3: versioning + 30-day noncurrent lifecycle; R2: nightly `rclone sync` to a separate backup bucket, deleted objects kept 30 days). |
 | Malware scanning | ClamAV `clamav/clamav:stable`, clamd INSTREAM on 3310 | ADR-0010. Internal only. |
 | File handling | python-magic (libmagic), pypdfium2, Pillow, python-docx, openpyxl, striprtf, zipfile, defusedxml | Worker image only needs these at runtime; the API image is the same image. |
 | Mail | SMTP — Mailpit in dev; Postmark / SES / Brevo SMTP in prod | A-12, ADR-0012. |
@@ -89,7 +89,7 @@ Style rules:
 | web | `datahub_web` | 3410 | 3000 | Z2 App | Next.js UI; in dev rewrites `/api/*` to `datahub_api`. No secrets beyond public config. | No |
 | api | `datahub_api` | 8410 | 8000 | Z2 App | REST `/api/v1`, WebSocket `/api/v1/ws`, health `/healthz` `/readyz`, internal `/metrics`. Issues presigned URLs. | No |
 | worker | `datahub_worker` | – | – | Z3 Processing | Celery tasks: processing, archive expansion, duplicates, exports, email, finance jobs, retention. Only component that reads untrusted file bytes. | No |
-| beat | `datahub_beat` | – | – | Z3 Processing | Celery beat schedule (`uploads.expire_sessions`, `finance.release_pending`, `finance.reconcile`, `exports.expire`, `retention.purge`). Exactly one instance. | Schedule file only |
+| beat | `datahub_beat` | – | – | Z3 Processing | Celery beat schedule (`uploads.expire_sessions`, `finance.release_pending`, `finance.reconcile`, `exports.expire`, `retention.purge`, `admin.requeue_stalled` every 5 min — AM-10). Exactly one instance. | Schedule file only |
 | postgres | `datahub_postgres` | 5440 | 5432 | Z4 Data | System of record for all entities, ledger, audit, outbox. | Yes (volume) |
 | redis | `datahub_redis` | 6390 | 6379 | Z4 Data | Celery broker/result backend, pub/sub channels, rate-limit counters. | Ephemeral (AOF optional) |
 | s3 | `datahub_s3` (dev) / R2 or S3 (prod) | 9410 S3 API, 9411 filer UI (dev only) | 8333 S3, 8888 filer | Z4 Data (dev) / Z5 External (prod) | Private object storage for all binary content. | Yes |
@@ -198,9 +198,9 @@ All services from §4 run on one compose network `datahub_net`, with named volum
 
 - **Host:** one Linux VM (baseline sizing 8 vCPU / 32 GB RAM / 400 GB SSD; final provider per DEPLOYMENT_PLAN.md, HA-05). Firewall allows 22 (admin IPs only), 80, 443.
 - **Containers:** `datahub_caddy`, `datahub_web`, `datahub_api` (2+ Uvicorn workers), `datahub_worker` (processing + default + email), `datahub_worker` replica for `exports` if needed, `datahub_beat` (single), `datahub_postgres`, `datahub_redis`, `datahub_clamav`, all from versioned images (`ghcr.io/<org>/datahub-api:<git-sha>`, `datahub-web:<git-sha>`).
-- **Managed storage:** Cloudflare R2 (preferred: no egress fees) or AWS S3; bucket `datahub-private` with versioning and lifecycle rules (abort incomplete multipart uploads after 1 day, expire `exports/` after 7 days per A-15).
+- **Managed storage:** Cloudflare R2 (preferred: no egress fees) or AWS S3; bucket `datahub-private` with lifecycle rules (abort incomplete multipart uploads after 1 day, expire `exports/` after 7 days per A-15).
 - **Email:** external SMTP provider. **Error tracking:** Sentry (optional).
-- **Backups:** nightly `pg_dump` to a separate backup bucket (RPO 24 h), optional WAL archiving for 15 min RPO; object versioning for storage; restore drill per BACKUP_DISASTER_RECOVERY.md (RTO 4 h).
+- **Backups:** nightly `pg_dump` to a separate backup bucket (RPO 24 h), optional WAL archiving for 15 min RPO; object storage per baseline AM-13 — on AWS S3 bucket versioning + lifecycle (noncurrent versions kept 30 days); on Cloudflare R2 (no versioning) a nightly `rclone sync` of `datahub-private` to a separate backup bucket/provider with 30-day retention of deleted objects; restore drill per BACKUP_DISASTER_RECOVERY.md (RTO 4 h).
 - **Releases:** CI builds images, migrations run as a one-off `api` container (`alembic upgrade head`) before rolling `api`/`worker` restart; rollback = previous image tag + backward-compatible migrations (expand/contract).
 
 ## 9. Scaling path
@@ -235,7 +235,7 @@ Initial capacity (A-03) fits one VM. Each step below is triggered by a measurabl
 | ID | Attribute | Stimulus | Environment | Response | Measure (baseline §14) |
 |---|---|---|---|---|---|
 | QAS-01 | Performance | 200 concurrent users browse datasets, wallet, tasks | Normal load, prod VM | Non-file endpoints answer from indexed queries with pagination | p95 < 300 ms (NFR-PERF) |
-| QAS-02 | Upload reliability | Contributor uploads a 5 GB PDF; network drops twice | Normal load | Client resumes from `GET /uploads/{id}` ListParts, re-uploads only missing parts | ≥ 99 % completion for files ≤ 5 GB (NFR-UPL) |
+| QAS-02 | Upload reliability | Contributor uploads a 4 GB PDF; network drops twice | Normal load | Client resumes from `GET /uploads/{id}` ListParts, re-uploads only missing parts | ≥ 99 % completion for files ≤ 4 GB (NFR-UPL) |
 | QAS-03 | Throughput | 100 GB of files complete in one hour | Peak | Processing workers hash+scan in streaming fashion | ≥ 2 GB/min per worker; backlog alert at 15 min |
 | QAS-04 | Integrity (money) | Reviewer double-clicks Finalize; network retries the request | Normal | Second request returns the original result; one `ledger_journals` row with key `dataset_review:{review_id}:earning` | Zero duplicate journals (unique constraint); nightly reconcile mismatch = 0 |
 | QAS-05 | Integrity (concurrency) | Two withdrawal requests for the full available balance arrive within 10 ms | Normal | Wallet `FOR UPDATE` serialises; second fails `insufficient_balance` or `open_payout_exists` | Never negative `available`; one open payout per user |

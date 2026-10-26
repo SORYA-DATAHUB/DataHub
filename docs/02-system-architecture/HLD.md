@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Document ID | DH-ARCH-HLD |
-| Version | 1.0 |
+| Version | 1.1 (baseline §16 AM-01, AM-06, AM-10, AM-13 applied) |
 | Date | 2026-10-26 |
 | Status | Baseline |
 | Owner | CTO role |
@@ -244,7 +244,7 @@ flowchart LR
     q --> w
 ```
 
-- Part size 16 MiB, raised automatically so `part_count ≤ 10,000`. 5 GB file → 320 parts.
+- Part size 16 MiB, raised automatically so `part_count ≤ 10,000`. Maximum file (4,000,000,000 B, AM-01) → 239 parts.
 - Init validates: A-09 preconditions, extension in allowed list, declared size ≤ `max_file_bytes`, dataset total ≤ `max_dataset_bytes`, user unreviewed storage ≤ `user_pending_quota_bytes`, file count ≤ 2,000, dataset status `draft` or `changes_requested`.
 - Complete validates the part list against ListParts and the object size against the declared size (mismatch → abort + `size_mismatch`).
 - Abandoned sessions: `uploads.expire_sessions` (beat 15 min) aborts multipart uploads older than 24 h; a bucket lifecycle rule aborts incomplete multipart uploads after 1 day as a backstop.
@@ -294,6 +294,7 @@ flowchart TB
 | `processing.detect_duplicates(file_id)` | processing | after hash | 4 / 5 min | 3 |
 | `uploads.expire_sessions` | default | beat 15 min | 4 / 5 min | next run |
 | `finance.release_pending` | default | beat hourly | 9 / 10 min | next run |
+| `admin.requeue_stalled` (AM-10) | default | beat 5 min | 2 / 3 min | next run |
 | `finance.reconcile` | default | beat nightly 02:00 UTC | 25 / 30 min | next run |
 | `messaging.send_email(outbox_id)` | email | outbox insert | 50 / 60 s | 8, backoff to 1 h |
 | `exports.build_export(job_id)` | exports | admin request | 230 / 240 min | 2 |
@@ -416,9 +417,9 @@ flowchart TB
             rd[("datahub_redis :6379")]
             cl["datahub_clamav :3310"]
         end
-        bk["backup job<br/>nightly pg_dump"]
+        bk["backup job<br/>nightly pg_dump + rclone sync (R2)"]
     end
-    r2[("R2 or S3<br/>datahub-private, versioned")]
+    r2[("R2 or S3<br/>datahub-private<br/>S3: versioned / R2: nightly rclone copy")]
     bb[("Backup bucket<br/>separate credentials")]
     smtp["SMTP provider :587"]
     sentry["Sentry"]
